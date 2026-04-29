@@ -80,39 +80,7 @@ VALID_BASE_DOMAINS = {
     "web.facebook.com",
 }
 
-# Query parameters to IGNORE during comparison (session/tracking)
-IGNORED_PARAMS = {
-    # Tracking & attribution
-    "ref",
-    "referral_code",
-    "referral_story_type",
-    "referral_surface",
-    "tracking",
-    "surface",
-    "section_token",
-    "__tn__",
-    "__cft__",
-    "contextRouterSourceType",
-    # Facebook internal
-    "fb_dtsg_ag",
-    "jazoest",
-    "lsd",
-    # UTM
-    "utm_source",
-    "utm_medium",
-    "utm_campaign",
-    "utm_content",
-    "utm_term",
-    # Click IDs
-    "gclid",
-    "msclkid",
-    "fbclid",
-    # Session
-    "locale",
-    "surface_type",
-    "fs",
-    "_rdr",
-}
+
 
 # Sort order normalization
 SORT_ORDER_MAP = {
@@ -164,36 +132,7 @@ DELIVERY_MAP = {
     "shipped": "shipping",
 }
 
-# Known category slugs → category IDs (browser-verified Apr 2026)
-CATEGORY_SLUG_TO_ID = {
-    "vehicles": "vehicles",
-    "electronics": "electronics",
-    "propertyrentals": "propertyrentals",
-    "apparel": "apparel",
-    "furniture": "furniture",
-    "home": "home",
-    "entertainment": "entertainment",
-    "garden": "garden",
-    "hobbies": "hobbies",
-    "sporting": "sporting",
-    "toys": "toys",
-    "free": "free",
-    "pets": "pets",
-    "office": "office",
-    "musicalinstruments": "musicalinstruments",
-    "classifieds": "classifieds",
-    "family": "family",
-}
 
-# Known city slugs (non-exhaustive, browser-verified Apr 2026)
-KNOWN_CITY_SLUGS = {
-    "sanfrancisco", "newyork", "losangeles", "chicago", "houston",
-    "phoenix", "philadelphia", "sanantonio", "sandiego", "dallas",
-    "austin", "seattle", "denver", "boston", "nashville",
-    "portland", "miami", "atlanta", "detroit", "minneapolis",
-    "london", "toronto", "vancouver", "sydney", "melbourne",
-    "mumbai", "delhi", "bangalore", "hyderabad",
-}
 
 # Property type normalization
 PROPERTY_TYPE_MAP = {
