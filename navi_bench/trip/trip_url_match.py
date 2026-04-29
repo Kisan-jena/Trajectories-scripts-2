@@ -87,31 +87,6 @@ VALID_DOMAINS = {
     "au.trip.com",
 }
 
-# Query parameters to IGNORE during comparison (session/UI state, not
-# user-intentional search filters)
-IGNORED_PARAMS = {
-    "locale",
-    "curr",
-    "display",
-    "subStamp",
-    "isCT",
-    "isFlexible",
-    "isFirstEnterDetail",
-    "isRightClick",
-    "flexType",
-    "fixedDate",
-    "hotelType",           # default type flag, not user filter
-    "countryId",           # auto-set from city
-    "provinceId",          # auto-set from city
-    "destName",            # auto-set display name
-    "paymentChannel",
-    "sessionId",
-    "from",
-    "source",
-    "selectedHotelId",
-    "recmd",
-}
-
 # ─────────────────────────────────────────────────────────────
 # listFilters category IDs → human-readable names
 # ─────────────────────────────────────────────────────────────
@@ -126,39 +101,6 @@ CATEGORY_NAMES = {
     "23": "cancellation",
     "75": "property_type",
 }
-
-# Known amenity IDs → names (for logging / debugging)
-# Browser-verified against us.trip.com listFilters (Mar 2026)
-AMENITY_IDS = {
-    "102":    "free_wifi",
-    "656001": "parking",
-    "147":    "restaurant",
-    "65":     "spa",
-    "42":     "gym",
-    "103":    "airport_shuttle",
-    "104":    "pet_friendly",
-    "605":    "pool",
-}
-
-# Known sort IDs
-SORT_IDS = {
-    "1":  "recommended",
-    "3":  "lowest_price",
-    "6":  "distance",
-    "7":  "star_rating",
-    "10": "guest_rating",
-}
-
-# Known property type tag IDs
-PROPERTY_TYPE_TAGS = {
-    "495": "hotel",
-    "496": "hostel",
-    "497": "apartment",
-    "498": "villa",
-    "499": "resort",
-    "500": "guesthouse",
-}
-
 
 # ============================================================================
 # VERIFIER CLASS

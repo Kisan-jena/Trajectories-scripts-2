@@ -61,31 +61,6 @@ VALID_DOMAINS = {
     "in.trip.com",
 }
 
-# Cabin class codes
-CABIN_CLASSES = {
-    "y": "economy",
-    "c": "business",
-    "f": "first",
-    "s": "premium_economy",
-}
-
-# Flight type codes
-FLIGHT_TYPES = {
-    "rt": "round_trip",
-    "ow": "one_way",
-    "mt": "multi_city",
-}
-
-# Query params that are auto-set / cosmetic and should be ignored
-IGNORED_PARAMS = {
-    "lowpricemode",
-    "searchboxarg",
-    "locale",
-    "curr",
-    "from",
-    "source",
-    "sessionId",
-}
 
 
 # ─────────────────────────────────────────────────────────────

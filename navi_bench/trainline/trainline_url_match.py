@@ -184,36 +184,6 @@ REGIONAL_DOMAINS = {
     "trainline.de",
 }
 
-# Query parameters to IGNORE during comparison
-IGNORED_PARAMS = {
-    "lang",
-    "selectedTab",
-    "splitSave",
-    "directSearch",
-    "dpiCookieId",
-    "partnershipType",
-    "partnershipSelection",
-    "selectedOutward",
-    "selectedInward",
-    "transportModes[]",
-    "transportmodes[]",
-    "utm_source",
-    "utm_medium",
-    "utm_campaign",
-    "utm_content",
-    "utm_term",
-    "ref",
-    "gclid",
-    "msclkid",
-    "fbclid",
-    "searchId",
-    "wcid",
-    "source",
-    "cmpid",
-    "redirected",
-    "type",
-    "qd",
-}
 
 # URN prefix for Trainline station identifiers
 STATION_URN_PREFIX = "urn:trainline:generic:loc:"
