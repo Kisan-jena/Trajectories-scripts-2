@@ -102,6 +102,66 @@ REGIONAL_DOMAINS = {
     "expedia.com.ph",
 }
 
+# Query parameters to IGNORE during flight comparison
+IGNORED_FLIGHT_PARAMS = {
+    "flight-type",
+    "mode",
+    "fromType",
+    "toType",
+    "fromDate",
+    "toDate",
+    "d1",
+    "d2",
+    "infantinlap",
+    "locale",
+    "currency",
+    "siteid",
+    "rfrr",
+    "tpid",
+    "eapid",
+    "utm_source",
+    "utm_medium",
+    "utm_campaign",
+    "utm_content",
+    "utm_term",
+    "ref",
+    "semcid",
+    "semdtl",
+    "gclid",
+    "msclkid",
+    "selectedOfferToken",
+    "newFlightSearch",
+    "previousDateful",
+    "filters",
+}
+
+# Query parameters to IGNORE during hotel comparison
+IGNORED_HOTEL_PARAMS = {
+    "locale",
+    "currency",
+    "siteid",
+    "rfrr",
+    "tpid",
+    "eapid",
+    "utm_source",
+    "utm_medium",
+    "utm_campaign",
+    "ref",
+    "latLong",
+    "theme",
+    "userIntent",
+    "selected",
+    "searchId",
+    "propertyId",
+    "gclid",
+    "msclkid",
+    "semdtl",
+    "semcid",
+    "pwaDialogNested",
+    "mapBounds",
+    "neighborhood",
+    "flexibility",
+}
 
 # Cabin class normalization mapping
 CABIN_CLASS_MAP = {
