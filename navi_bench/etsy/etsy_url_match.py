@@ -255,6 +255,10 @@ class EtsyUrlMatch(BaseMetric):
             if gt["customizable"] is not None and agent["customizable"] != gt["customizable"]:
                 mismatches.append("customizable mismatch")
             
+            # 14. Gift wrap
+            if gt.get("gift_wrap") is not None and agent.get("gift_wrap") != gt.get("gift_wrap"):
+                mismatches.append("gift_wrap mismatch")
+
             if mismatches:
                 return False, {"mismatches": mismatches}
 
