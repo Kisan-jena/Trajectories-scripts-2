@@ -225,10 +225,10 @@ class TestMultiGT:
         import asyncio
         asyncio.run(v.reset())
 
-        # First update does NOT match first GT
-        asyncio.run(v.update(url=f"{BASE}/search?q=ring"))
+        # First update matches NONE
+        asyncio.run(v.update(url=f"{BASE}/search?q=bracelet"))
 
-        # Second update matches second GT → locks result
+        # Second update matches SECOND GT
         asyncio.run(v.update(url=f"{BASE}/search?q=necklace"))
 
         result = asyncio.run(v.compute())
