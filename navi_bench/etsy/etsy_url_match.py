@@ -204,9 +204,7 @@ class EtsyUrlMatch(BaseMetric):
                     mismatches.append("category_path mismatch")
 
             # 3. Price
-            for key in ["min_price", "max_price"]:
-                if gt[key] is not None and agent[key] != gt[key]:
-                    mismatches.append(f"{key} mismatch")
+            mismatches.extend(self._compare_price(agent, gt))
 
             # 4. Special offers
             for key in ["free_shipping", "is_discounted"]:
@@ -245,7 +243,7 @@ class EtsyUrlMatch(BaseMetric):
                 agent["attributes"], gt["attributes"]
             )
             if not attr_match:
-                return False, attr_details
+                mismatches.extend(attr_details.get("mismatches", []))
 
             # 12. Sort
             if gt["sort"] and agent["sort"] != gt["sort"]:
@@ -256,9 +254,9 @@ class EtsyUrlMatch(BaseMetric):
                 mismatches.append("customizable mismatch")
             
             # 14. Gift wrap
-            if gt["gift_wrap"] is not None and agent["gift_wrap"] != gt["gift_wrap"]:
+            if gt.get("gift_wrap") is not None and agent.get("gift_wrap") != gt.get("gift_wrap"):
                 mismatches.append("gift_wrap mismatch")
-            
+
             if mismatches:
                 return False, {"mismatches": mismatches}
 
@@ -286,9 +284,7 @@ class EtsyUrlMatch(BaseMetric):
                     )
 
             # Price
-            for key in ["min_price", "max_price"]:
-                if gt[key] is not None and agent[key] != gt[key]:
-                    mismatches.append(f"{key} mismatch")
+            mismatches.extend(self._compare_price(agent, gt))
 
             # Offers
             for key in ["free_shipping", "is_discounted"]:
@@ -314,12 +310,20 @@ class EtsyUrlMatch(BaseMetric):
             if gt["is_star_seller"] is not None and agent["is_star_seller"] != gt["is_star_seller"]:
                 mismatches.append("is_star_seller mismatch")
 
+            # Etsy Pick
+            if gt["is_merch_library"] is not None and agent["is_merch_library"] != gt["is_merch_library"]:
+                mismatches.append("is_merch_library mismatch")
+
+            # Customizable
+            if gt["customizable"] is not None and agent["customizable"] != gt["customizable"]:
+                mismatches.append("customizable mismatch")
+
             # Attributes
             attr_match, attr_details = self._compare_attributes(
                 agent["attributes"], gt["attributes"]
             )
             if not attr_match:
-                return False, attr_details
+                mismatches.extend(attr_details.get("mismatches", []))
 
             #gift wrap
             if gt.get("gift_wrap") is not None and agent.get("gift_wrap") != gt.get("gift_wrap"):
@@ -348,9 +352,7 @@ class EtsyUrlMatch(BaseMetric):
             mismatches = []
 
             # Price
-            for key in ["min_price", "max_price"]:
-                if gt[key] is not None and agent[key] != gt[key]:
-                    mismatches.append(f"{key} mismatch")
+            mismatches.extend(self._compare_price(agent, gt))
 
             # On sale
             if gt["is_on_sale"] is not None and agent["is_on_sale"] != gt["is_on_sale"]:
@@ -373,7 +375,7 @@ class EtsyUrlMatch(BaseMetric):
                 agent["attributes"], gt["attributes"]
             )
             if not attr_match:
-                return False, attr_details
+                mismatches.extend(attr_details.get("mismatches", []))
 
             if mismatches:
                 return False, {"mismatches": mismatches}
@@ -461,6 +463,25 @@ class EtsyUrlMatch(BaseMetric):
 
         return result
 
+
+    def _compare_price(self, agent: dict, gt: dict) -> list[str]:
+        mismatches = []
+
+        # min_price (with fallback to 0)
+        if gt.get("min_price") is not None:
+            gt_val = gt["min_price"]
+            agent_val = agent.get("min_price") if agent.get("min_price") is not None else 0
+
+            if agent_val != gt_val:
+                mismatches.append("min_price mismatch")
+
+        # max_price (strict)
+        if gt.get("max_price") is not None:
+            if agent.get("max_price") != gt["max_price"]:
+                mismatches.append("max_price mismatch")
+
+        return mismatches
+
     # --------------------- CATEGORY PARSER --------------------
     def _parse_category_url(self, url: str) -> dict:
         parsed = urlparse(url)
@@ -477,6 +498,7 @@ class EtsyUrlMatch(BaseMetric):
             "instant_download": "",
             "item_type": "",
             "is_star_seller": None,
+            "is_merch_library": None, 
             "customizable": None,
             "attributes": {},
             "sort": "",
@@ -503,6 +525,8 @@ class EtsyUrlMatch(BaseMetric):
         result["item_type"] = self._get_param(query, "item_type").lower()
 
         result["is_star_seller"] = self._to_bool(self._get_param(query, "is_star_seller"))
+
+        result["is_merch_library"] = self._to_bool(self._get_param(query, "is_merch_library"))
 
         result["sort"] = self._get_param(query, "order").lower()
 
