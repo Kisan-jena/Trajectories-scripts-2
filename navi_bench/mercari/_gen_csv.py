@@ -1,0 +1,117 @@
+"""Generate mercari_benchmark_tasks.csv with 70 hard tasks."""
+import csv, json, os
+
+HEADER = [
+    "task_id","task_generation_config_json","env","domain",
+    "l1_category","l2_category","suggested_difficulty",
+    "suggested_hint","suggested_max_steps","suggested_split","metadata_json",
+]
+
+TARGET = "navi_bench.mercari.mercari_url_match.generate_task_config"
+HINT = "On Mercari, use the search bar and left sidebar filters. Prices are in CENTS in the URL ($25=2500). Extract the top 3 listing titles, prices, conditions, and the full search URL."
+URL = "https://www.mercari.com/"
+LOC = "United States"
+TZ = "America/Los_Angeles"
+
+def row(tid, cat2, task, gt_urls):
+    cfg = {
+        "_target_": TARGET, "task": task, "gt_url": gt_urls,
+        "location": LOC, "timezone": TZ, "url": URL,
+        "timestamp": None, "values": {},
+    }
+    return [tid, json.dumps(cfg), "real", "mercari", "e_commerce", cat2, "hard", HINT, 50, "validation", "null"]
+
+tasks = []
+
+# --- general_search (0-9): keyword + price + sort + condition ---
+tasks.append(row("mercari/general/0","general_search","Search Mercari for vintage leather jacket priced between $75 and $200, in new or like-new condition, sorted by lowest price first. For each of the top 3 results, extract the listing title, price, and condition. Report the full search URL.",["https://www.mercari.com/search/?keyword=vintage+leather+jacket&minPrice=7500&maxPrice=20000&itemConditions=1-2&sortBy=3"]))
+tasks.append(row("mercari/general/1","general_search","I need running shoes under $80 in good condition. Sort by newest listings first. Extract top 3 listing titles, prices, and the search URL.",["https://www.mercari.com/search/?keyword=running+shoes&maxPrice=8000&itemConditions=3&sortBy=2"]))
+tasks.append(row("mercari/general/2","general_search","Find me a Nintendo Switch on Mercari. Budget is $150 to $300. New condition only. Sort by best match. Report the search URL and top 3 results.",["https://www.mercari.com/search/?keyword=nintendo+switch&minPrice=15000&maxPrice=30000&itemConditions=1&sortBy=1"]))
+tasks.append(row("mercari/general/3","general_search","Search for AirPods Pro on Mercari, priced $50 to $150, like-new or good condition, sorted by highest price first. Report search URL and top 3.",["https://www.mercari.com/search/?keyword=airpods+pro&minPrice=5000&maxPrice=15000&itemConditions=2-3&sortBy=4"]))
+tasks.append(row("mercari/general/4","general_search","Looking for a yoga mat under $30 in any condition. Sort by lowest price. Report the full URL and top 3 listings.",["https://www.mercari.com/search/?keyword=yoga+mat&maxPrice=3000&sortBy=3"]))
+tasks.append(row("mercari/general/5","general_search","Find a KitchenAid stand mixer between $100 and $250, in fair or good condition. Newest first. Report URL and top 3.",["https://www.mercari.com/search/?keyword=kitchenaid+stand+mixer&minPrice=10000&maxPrice=25000&itemConditions=3-4&sortBy=2"]))
+tasks.append(row("mercari/general/6","general_search","Search for a Canon EOS R camera body, $500 to $1000, new condition, sorted by lowest price. Report URL and top 3 listings.",["https://www.mercari.com/search/?keyword=canon+eos+r&minPrice=50000&maxPrice=100000&itemConditions=1&sortBy=3"]))
+tasks.append(row("mercari/general/7","general_search","I want to find a coffee table between $25 and $100 in good or like-new condition. Sort by newest. Report URL.",["https://www.mercari.com/search/?keyword=coffee+table&minPrice=2500&maxPrice=10000&itemConditions=2-3&sortBy=2"]))
+tasks.append(row("mercari/general/8","general_search","Find me a weighted blanket on Mercari under $40 in any condition. Sort by best match. Report URL and top 3.",["https://www.mercari.com/search/?keyword=weighted+blanket&maxPrice=4000&sortBy=1"]))
+tasks.append(row("mercari/general/9","general_search","Search for a drone priced $200 and up, new or like-new condition, sorted by highest price first. Report the search URL.",["https://www.mercari.com/search/?keyword=drone&minPrice=20000&itemConditions=1-2&sortBy=4"]))
+
+# --- price_math (10-19): arithmetic to derive cents ---
+tasks.append(row("mercari/price_math/0","price_math","I sold my old phone for $120 and got a $30 gift card. Using all $150 to buy a phone case and earbuds set on Mercari. New condition. Cheapest first. Report URL and top 3.",["https://www.mercari.com/search/?keyword=phone+case+earbuds&maxPrice=15000&itemConditions=1&sortBy=3"]))
+tasks.append(row("mercari/price_math/1","price_math","My friend and I are splitting the cost of a projector. We each have $175, so total budget is $350. Like-new condition. Newest first. Report URL.",["https://www.mercari.com/search/?keyword=projector&maxPrice=35000&itemConditions=2&sortBy=2"]))
+tasks.append(row("mercari/price_math/2","price_math","I saved $25 per week for 8 weeks. That gives me $200 for a guitar pedal. Good condition minimum. Cheapest first. Report URL.",["https://www.mercari.com/search/?keyword=guitar+pedal&maxPrice=20000&itemConditions=3&sortBy=3"]))
+tasks.append(row("mercari/price_math/3","price_math","Birthday money: grandma $50, parents $100, uncle $25. Total $175 for a pair of sneakers. New only. Lowest price. Report URL.",["https://www.mercari.com/search/?keyword=sneakers&maxPrice=17500&itemConditions=1&sortBy=3"]))
+tasks.append(row("mercari/price_math/4","price_math","Total budget is $500 for home office. Already spent $200 on a monitor. That leaves $300 for a mechanical keyboard and mouse. Like-new. Report URL.",["https://www.mercari.com/search/?keyword=mechanical+keyboard+mouse&maxPrice=30000&itemConditions=2"]))
+tasks.append(row("mercari/price_math/5","price_math","I have three $20 bills and a $50 bill. Looking for headphones in the $50 to $110 range on Mercari. Good condition. Cheapest first. URL please.",["https://www.mercari.com/search/?keyword=headphones&minPrice=5000&maxPrice=11000&itemConditions=3&sortBy=3"]))
+tasks.append(row("mercari/price_math/6","price_math","My tax refund was $1,600. Using exactly one quarter of it on a handbag. New condition. Highest price first. Report URL.",["https://www.mercari.com/search/?keyword=handbag&maxPrice=40000&itemConditions=1&sortBy=4"]))
+tasks.append(row("mercari/price_math/7","price_math","Earned $15/hour for 20 hours of babysitting. That's $300 for a tablet. Minimum spend $100. Like-new. Cheapest first. Report URL.",["https://www.mercari.com/search/?keyword=tablet&minPrice=10000&maxPrice=30000&itemConditions=2&sortBy=3"]))
+tasks.append(row("mercari/price_math/8","price_math","My monthly fun budget is $80. Saved 3 months for a smartwatch. So $240 max. New or like-new. Newest first. Report URL.",["https://www.mercari.com/search/?keyword=smartwatch&maxPrice=24000&itemConditions=1-2&sortBy=2"]))
+tasks.append(row("mercari/price_math/9","price_math","Commission check was $450. Spending 2/3 of it on a camera lens. That's $300. Good condition minimum. Price $100 to $300. URL please.",["https://www.mercari.com/search/?keyword=camera+lens&minPrice=10000&maxPrice=30000&itemConditions=3"]))
+
+# --- multi_condition (20-29): multi-select conditions ---
+tasks.append(row("mercari/multi_condition/0","multi_condition","Find backpacks on Mercari in new, like-new, or good condition. Under $60. Cheapest first. Report URL.",["https://www.mercari.com/search/?keyword=backpack&maxPrice=6000&itemConditions=1-2-3&sortBy=3"]))
+tasks.append(row("mercari/multi_condition/1","multi_condition","Search for watches in fair or poor condition under $50. Newest first. Report URL.",["https://www.mercari.com/search/?keyword=watch&maxPrice=5000&itemConditions=4-5&sortBy=2"]))
+tasks.append(row("mercari/multi_condition/2","multi_condition","I want sunglasses in new or like-new condition, $20 to $80. Report URL.",["https://www.mercari.com/search/?keyword=sunglasses&minPrice=2000&maxPrice=8000&itemConditions=1-2"]))
+tasks.append(row("mercari/multi_condition/3","multi_condition","Looking for a desk lamp. Good, fair, or poor condition is fine. Under $25. Cheapest first. URL.",["https://www.mercari.com/search/?keyword=desk+lamp&maxPrice=2500&itemConditions=3-4-5&sortBy=3"]))
+tasks.append(row("mercari/multi_condition/4","multi_condition","Find board games in like-new or good condition. $10 to $40. Newest. Report URL.",["https://www.mercari.com/search/?keyword=board+game&minPrice=1000&maxPrice=4000&itemConditions=2-3&sortBy=2"]))
+tasks.append(row("mercari/multi_condition/5","multi_condition","Search for sneakers in all conditions except poor. Budget $30 to $120. Report URL.",["https://www.mercari.com/search/?keyword=sneakers&minPrice=3000&maxPrice=12000&itemConditions=1-2-3-4"]))
+tasks.append(row("mercari/multi_condition/6","multi_condition","Find headphones in new or good condition. Under $100. Lowest price first. URL.",["https://www.mercari.com/search/?keyword=headphones&maxPrice=10000&itemConditions=1-3&sortBy=3"]))
+tasks.append(row("mercari/multi_condition/7","multi_condition","Search for jackets in like-new, good, or fair condition. $40 to $150. Report URL.",["https://www.mercari.com/search/?keyword=jacket&minPrice=4000&maxPrice=15000&itemConditions=2-3-4"]))
+tasks.append(row("mercari/multi_condition/8","multi_condition","I need books in any condition. Under $15. Cheapest first. Report URL.",["https://www.mercari.com/search/?keyword=books&maxPrice=1500&itemConditions=1-2-3-4-5&sortBy=3"]))
+tasks.append(row("mercari/multi_condition/9","multi_condition","Find vinyl records in good or like-new condition. $5 to $30. Newest first. URL.",["https://www.mercari.com/search/?keyword=vinyl+record&minPrice=500&maxPrice=3000&itemConditions=2-3&sortBy=2"]))
+
+# --- brand_category (30-39): brand + category combos ---
+tasks.append(row("mercari/brand_cat/0","brand_category","Search for Nike shoes under $100 in new condition. Use the Nike brand filter (brandIds=4578). Lowest price. Report URL.",["https://www.mercari.com/search/?keyword=shoes&maxPrice=10000&itemConditions=1&brandIds=4578&sortBy=3"]))
+tasks.append(row("mercari/brand_cat/1","brand_category","Find electronics (categoryIds=7) priced $50 to $200. Like-new condition. Newest first. Report URL.",["https://www.mercari.com/search/?keyword=electronics&minPrice=5000&maxPrice=20000&itemConditions=2&categoryIds=7&sortBy=2"]))
+tasks.append(row("mercari/brand_cat/2","brand_category","Search women's clothing (categoryIds=1) under $40. Good condition. Cheapest first. Report URL.",["https://www.mercari.com/search/?keyword=dress&maxPrice=4000&itemConditions=3&categoryIds=1&sortBy=3"]))
+tasks.append(row("mercari/brand_cat/3","brand_category","Find men's items (categoryIds=2) priced $30 to $100. New or like-new. Report URL.",["https://www.mercari.com/search/?keyword=shirt&minPrice=3000&maxPrice=10000&itemConditions=1-2&categoryIds=2"]))
+tasks.append(row("mercari/brand_cat/4","brand_category","Search Nike brand (brandIds=4578) sneakers $80 to $200. Like-new. Newest. Report URL.",["https://www.mercari.com/search/?keyword=sneakers&minPrice=8000&maxPrice=20000&itemConditions=2&brandIds=4578&sortBy=2"]))
+tasks.append(row("mercari/brand_cat/5","brand_category","Find electronics under $50 in the electronics category (categoryIds=7). Any condition. Cheapest. URL.",["https://www.mercari.com/search/?keyword=charger&maxPrice=5000&categoryIds=7&sortBy=3"]))
+tasks.append(row("mercari/brand_cat/6","brand_category","Search for women's handbags (categoryIds=1). Budget $100 to $500. New only. Highest price first. URL.",["https://www.mercari.com/search/?keyword=handbag&minPrice=10000&maxPrice=50000&itemConditions=1&categoryIds=1&sortBy=4"]))
+tasks.append(row("mercari/brand_cat/7","brand_category","Find Nike (brandIds=4578) athletic wear. Under $60. Good condition. Report URL.",["https://www.mercari.com/search/?keyword=athletic+wear&maxPrice=6000&itemConditions=3&brandIds=4578"]))
+tasks.append(row("mercari/brand_cat/8","brand_category","Search men's category (categoryIds=2) for jackets $50 to $200. Like-new or good. URL.",["https://www.mercari.com/search/?keyword=jacket&minPrice=5000&maxPrice=20000&itemConditions=2-3&categoryIds=2"]))
+tasks.append(row("mercari/brand_cat/9","brand_category","Find electronics (categoryIds=7) over $200. New condition. Lowest price first. URL.",["https://www.mercari.com/search/?keyword=laptop&minPrice=20000&itemConditions=1&categoryIds=7&sortBy=3"]))
+
+# --- shipping_origin (40-47): free shipping + country source ---
+tasks.append(row("mercari/shipping/0","shipping_origin","Find Japanese items with free shipping on Mercari. Keyword: tea set. Under $50. New condition. Report URL.",["https://www.mercari.com/search/?keyword=tea+set&maxPrice=5000&itemConditions=1&shippingPayerIds=2&countrySources=2"]))
+tasks.append(row("mercari/shipping/1","shipping_origin","Search for sneakers from USA with free shipping. $50 to $150. Like-new. Cheapest. URL.",["https://www.mercari.com/search/?keyword=sneakers&minPrice=5000&maxPrice=15000&itemConditions=2&shippingPayerIds=2&countrySources=1&sortBy=3"]))
+tasks.append(row("mercari/shipping/2","shipping_origin","Find Japanese pottery with free shipping. Under $100. Good condition. Newest. URL.",["https://www.mercari.com/search/?keyword=pottery&maxPrice=10000&itemConditions=3&shippingPayerIds=2&countrySources=2&sortBy=2"]))
+tasks.append(row("mercari/shipping/3","shipping_origin","Search for phone cases from USA. Free shipping. Under $20. Any condition. Report URL.",["https://www.mercari.com/search/?keyword=phone+case&maxPrice=2000&shippingPayerIds=2&countrySources=1"]))
+tasks.append(row("mercari/shipping/4","shipping_origin","Find free shipping items: keyword 'anime figure'. $20 to $80. New. Cheapest first. URL.",["https://www.mercari.com/search/?keyword=anime+figure&minPrice=2000&maxPrice=8000&itemConditions=1&shippingPayerIds=2&sortBy=3"]))
+tasks.append(row("mercari/shipping/5","shipping_origin","Search for Japanese kitchen knives with free shipping. $30 to $150. Good condition. URL.",["https://www.mercari.com/search/?keyword=kitchen+knife&minPrice=3000&maxPrice=15000&itemConditions=3&shippingPayerIds=2&countrySources=2"]))
+tasks.append(row("mercari/shipping/6","shipping_origin","Find USA-origin vintage clothing with free shipping. Under $60. Like-new. Newest. URL.",["https://www.mercari.com/search/?keyword=vintage+clothing&maxPrice=6000&itemConditions=2&shippingPayerIds=2&countrySources=1&sortBy=2"]))
+tasks.append(row("mercari/shipping/7","shipping_origin","Search for Japanese stationery. Free shipping. Under $25. New condition. Report URL.",["https://www.mercari.com/search/?keyword=stationery&maxPrice=2500&itemConditions=1&shippingPayerIds=2&countrySources=2"]))
+
+# --- red_herring (48-57): irrelevant details mixed in ---
+tasks.append(row("mercari/red_herring/0","red_herring","My interior designer says I need a minimalist desk lamp with warm lighting — she recommends 2700K bulbs specifically. Anyway, search Mercari for desk lamp under $40. Good condition. Cheapest first. Report URL.",["https://www.mercari.com/search/?keyword=desk+lamp&maxPrice=4000&itemConditions=3&sortBy=3"]))
+tasks.append(row("mercari/red_herring/1","red_herring","I'm a size 10.5 and I overpronate — my podiatrist recommends stability shoes. Looking for running shoes on Mercari, $40 to $100, new condition. None of those details are filters though. Newest first. URL.",["https://www.mercari.com/search/?keyword=running+shoes&minPrice=4000&maxPrice=10000&itemConditions=1&sortBy=2"]))
+tasks.append(row("mercari/red_herring/2","red_herring","My cat keeps scratching the couch so I need a cat tree. The one at PetSmart is $180 but that's insane. Search Mercari for cat tree, under $60, good condition. Sort cheapest. My cat's name is Mr. Whiskers. URL.",["https://www.mercari.com/search/?keyword=cat+tree&maxPrice=6000&itemConditions=3&sortBy=3"]))
+tasks.append(row("mercari/red_herring/3","red_herring","I watched 4 YouTube videos about espresso and now I'm an expert. Need an espresso machine, $80 to $250 on Mercari. Like-new — I don't want mineral buildup. The videos said Breville is best but that's not a filter. URL.",["https://www.mercari.com/search/?keyword=espresso+machine&minPrice=8000&maxPrice=25000&itemConditions=2"]))
+tasks.append(row("mercari/red_herring/4","red_herring","My roommate Dave says vinyl sounds better than digital — he's wrong but whatever. Looking for a turntable on Mercari, $50 to $200, good condition. Dave also wants me to get a tube amp but that's separate. Cheapest first. URL.",["https://www.mercari.com/search/?keyword=turntable&minPrice=5000&maxPrice=20000&itemConditions=3&sortBy=3"]))
+tasks.append(row("mercari/red_herring/5","red_herring","Moving to a studio apartment — only 400 sq ft so I need compact furniture. Search for folding table on Mercari, under $50. Fair condition is fine. My landlord says no drilling into walls but that's irrelevant. Newest first. URL.",["https://www.mercari.com/search/?keyword=folding+table&maxPrice=5000&itemConditions=4&sortBy=2"]))
+tasks.append(row("mercari/red_herring/6","red_herring","Training for a marathon and my coach says I need a foam roller for recovery. He also says I should eat more protein but that's not what I'm shopping for. Mercari: foam roller, under $20, any condition. Cheapest. URL.",["https://www.mercari.com/search/?keyword=foam+roller&maxPrice=2000&sortBy=3"]))
+tasks.append(row("mercari/red_herring/7","red_herring","My therapist says I should journal more. Looking for a nice leather journal on Mercari. Budget $15 to $40. New only — I want blank pages. She also recommended meditation but that's not a product. Report URL.",["https://www.mercari.com/search/?keyword=leather+journal&minPrice=1500&maxPrice=4000&itemConditions=1"]))
+tasks.append(row("mercari/red_herring/8","red_herring","I need a cast iron skillet for my new apartment. My grandma swears by Lodge brand but the brand filter uses IDs I don't know. Just search 'cast iron skillet', $20 to $60, good or like-new condition. Cheapest. URL.",["https://www.mercari.com/search/?keyword=cast+iron+skillet&minPrice=2000&maxPrice=6000&itemConditions=2-3&sortBy=3"]))
+tasks.append(row("mercari/red_herring/9","red_herring","I collect vintage cameras — specifically 35mm film cameras from the 1970s. But Mercari doesn't have a decade filter. Search for vintage film camera, $50 to $200, good condition. Highest price first. URL.",["https://www.mercari.com/search/?keyword=vintage+film+camera&minPrice=5000&maxPrice=20000&itemConditions=3&sortBy=4"]))
+
+# --- ultra_hard (58-69): 5+ filters, arithmetic, narrative ---
+tasks.append(row("mercari/ultra_hard/0","ultra_hard","I have $250 birthday money. Spending exactly half on Nike shoes (brandIds=4578). New condition, free shipping, from USA. Cheapest first. Report URL.",["https://www.mercari.com/search/?keyword=nike+shoes&maxPrice=12500&itemConditions=1&brandIds=4578&shippingPayerIds=2&countrySources=1&sortBy=3"]))
+tasks.append(row("mercari/ultra_hard/1","ultra_hard","Search electronics (categoryIds=7) from Japan with free shipping. Budget $30 to $100. New or like-new. Deals only. Newest first. URL.",["https://www.mercari.com/search/?keyword=electronics&minPrice=3000&maxPrice=10000&itemConditions=1-2&categoryIds=7&shippingPayerIds=2&countrySources=2&withDealsOnly=true&sortBy=2"]))
+tasks.append(row("mercari/ultra_hard/2","ultra_hard","Three of us chipping in $100 each for a gaming console. Max $300. New condition. Electronics category (categoryIds=7). Free shipping. Cheapest first. URL.",["https://www.mercari.com/search/?keyword=gaming+console&maxPrice=30000&itemConditions=1&categoryIds=7&shippingPayerIds=2&sortBy=3"]))
+tasks.append(row("mercari/ultra_hard/3","ultra_hard","Search for Japanese tea sets (countrySources=2) with free shipping and deals. Under $75. Like-new or good condition. Newest first. Report URL.",["https://www.mercari.com/search/?keyword=tea+set&maxPrice=7500&itemConditions=2-3&shippingPayerIds=2&countrySources=2&withDealsOnly=true&sortBy=2"]))
+tasks.append(row("mercari/ultra_hard/4","ultra_hard","Saved $40/week for 5 weeks. That's $200 for women's shoes (categoryIds=1). New or like-new. Nike brand (brandIds=4578). Free shipping. Cheapest first. URL.",["https://www.mercari.com/search/?keyword=shoes&maxPrice=20000&itemConditions=1-2&categoryIds=1&brandIds=4578&shippingPayerIds=2&sortBy=3"]))
+tasks.append(row("mercari/ultra_hard/5","ultra_hard","My budget is $600. Already spent $350 on a monitor. Remaining $250 for a keyboard. Men's accessories (categoryIds=2). New. Free shipping. USA origin. Cheapest. URL.",["https://www.mercari.com/search/?keyword=keyboard&maxPrice=25000&itemConditions=1&categoryIds=2&shippingPayerIds=2&countrySources=1&sortBy=3"]))
+tasks.append(row("mercari/ultra_hard/6","ultra_hard","Find deals on Japanese anime figures. Free shipping. Budget $15 to $60. Good, fair, or poor condition. Newest listings. Deals only filter on. URL.",["https://www.mercari.com/search/?keyword=anime+figure&minPrice=1500&maxPrice=6000&itemConditions=3-4-5&shippingPayerIds=2&countrySources=2&withDealsOnly=true&sortBy=2"]))
+tasks.append(row("mercari/ultra_hard/7","ultra_hard","Total holiday budget was $800. Spent $300 on gifts and $200 on decorations. That leaves $300 for a handbag. Women's (categoryIds=1). New. Free shipping. Highest price first. URL.",["https://www.mercari.com/search/?keyword=handbag&maxPrice=30000&itemConditions=1&categoryIds=1&shippingPayerIds=2&sortBy=4"]))
+tasks.append(row("mercari/ultra_hard/8","ultra_hard","Search for Nike (brandIds=4578) running shoes from USA, free shipping, deals only, new or like-new, $60 to $150. Sort by lowest price. Report URL.",["https://www.mercari.com/search/?keyword=running+shoes&minPrice=6000&maxPrice=15000&itemConditions=1-2&brandIds=4578&shippingPayerIds=2&countrySources=1&withDealsOnly=true&sortBy=3"]))
+tasks.append(row("mercari/ultra_hard/9","ultra_hard","I earned $20/hour for 15 hours tutoring. That's $300 for a vintage watch. Good or like-new condition. Free shipping. USA origin. Only on-sale items (statusIds=1). Cheapest. URL.",["https://www.mercari.com/search/?keyword=vintage+watch&maxPrice=30000&itemConditions=2-3&shippingPayerIds=2&countrySources=1&statusIds=1&sortBy=3"]))
+tasks.append(row("mercari/ultra_hard/10","ultra_hard","Find men's (categoryIds=2) jackets from Japan with free shipping. Budget $40 to $120. Like-new, good, or fair. Deals only. Newest first. URL.",["https://www.mercari.com/search/?keyword=jacket&minPrice=4000&maxPrice=12000&itemConditions=2-3-4&categoryIds=2&shippingPayerIds=2&countrySources=2&withDealsOnly=true&sortBy=2"]))
+tasks.append(row("mercari/ultra_hard/11","ultra_hard","Partner and I each have $125. Total $250 for a coffee machine. Electronics (categoryIds=7). New. Free shipping. USA. Deals. Lowest price. URL.",["https://www.mercari.com/search/?keyword=coffee+machine&maxPrice=25000&itemConditions=1&categoryIds=7&shippingPayerIds=2&countrySources=1&withDealsOnly=true&sortBy=3"]))
+
+out = os.path.join(os.path.dirname(__file__), "mercari_benchmark_tasks.csv")
+with open(out, "w", newline="", encoding="utf-8") as f:
+    w = csv.writer(f)
+    w.writerow(HEADER)
+    for t in tasks:
+        w.writerow(t)
+
+print(f"Wrote {len(tasks)} tasks to {out}")
