@@ -174,15 +174,6 @@ STATUS_MAP = {
     "sold": "2",
 }
 
-# Price preset mapping (sidebar radio buttons → URL values in cents)
-PRICE_PRESETS = {
-    "under_25": {"maxPrice": 2500},
-    "25_to_50": {"minPrice": 2500, "maxPrice": 5000},
-    "50_to_100": {"minPrice": 5000, "maxPrice": 10000},
-    "100_to_200": {"minPrice": 10000, "maxPrice": 20000},
-    "200_and_up": {"minPrice": 20000},
-}
-
 
 # =============================================================================
 # PARSING HELPERS
