@@ -15,8 +15,13 @@ The verifier handles all Swappa URL variations including:
 - Condition filter:   ?condition=new|mint|good|fair
 - Storage filter:     ?storage=128gb|256gb|512gb|1tb
 - Color filter:       ?color=black|blue|purple|gold|silver|...
-- Sort order:         ?sort=price_low|price_high|newest|oldest
+- Sort order:         ?sort=price_low|price_high|listing_created_newest|listing_created_oldest
 - Model filter:       ?model=<model_slug>  (for multi-model pages)
+- Model number:       ?modeln=<base64_encoded>  (base64-encoded model, e.g. A2848)
+- Edition filter:     ?edition=<base64_encoded>  (base64-encoded edition, e.g. mmWave 5G)
+- Memory filter:      ?memory=16gb|24gb  (for laptops)
+- Processor filter:   ?processor=apple-m2|...  (for laptops)
+- Checkboxes:         ?exclude_businesses=on|&accepts_stripe=on|&international=on|&phone_check_certified=on
 
 Browser-Verified CLICKABLE Filters (May 2026 on swappa.com):
   Left sidebar (desktop):
@@ -98,9 +103,10 @@ CARRIER_MAP = {
     "sprint": "sprint",
     "boost": "boost",
     "cricket": "cricket",
-    "mint-mobile": "mint-mobile",
-    "mint_mobile": "mint-mobile",
-    "mintmobile": "mint-mobile",
+    "mint": "mint",
+    "mint-mobile": "mint",
+    "mint_mobile": "mint",
+    "mintmobile": "mint",
     "us-cellular": "us-cellular",
     "us_cellular": "us-cellular",
     "uscellular": "us-cellular",
@@ -146,11 +152,13 @@ CONDITION_MAP = {
 }
 
 # Sort order normalization
+# Canonical values match actual Swappa URL params.
 SORT_MAP = {
+    # Canonical slugs (as they appear in Swappa URLs)
     "price_low": "price_low",
     "price_high": "price_high",
-    "newest": "newest",
-    "oldest": "oldest",
+    "listing_created_newest": "listing_created_newest",
+    "listing_created_oldest": "listing_created_oldest",
     # Aliases — Price (Low)
     "price_asc": "price_low",
     "price_ascending": "price_low",
@@ -173,18 +181,20 @@ SORT_MAP = {
     "price (high)": "price_high",
     "price_max": "price_high",
     # Aliases — Listing Created (Newest)
-    "newest_first": "newest",
-    "newest first": "newest",
-    "most_recent": "newest",
-    "most recent": "newest",
-    "recent": "newest",
-    "date": "newest",
-    "listing created (newest)": "newest",
+    "newest": "listing_created_newest",
+    "newest_first": "listing_created_newest",
+    "newest first": "listing_created_newest",
+    "most_recent": "listing_created_newest",
+    "most recent": "listing_created_newest",
+    "recent": "listing_created_newest",
+    "date": "listing_created_newest",
+    "listing created (newest)": "listing_created_newest",
     # Aliases — Listing Created (Oldest)
-    "oldest_first": "oldest",
-    "oldest first": "oldest",
-    "least_recent": "oldest",
-    "listing created (oldest)": "oldest",
+    "oldest": "listing_created_oldest",
+    "oldest_first": "listing_created_oldest",
+    "oldest first": "listing_created_oldest",
+    "least_recent": "listing_created_oldest",
+    "listing created (oldest)": "listing_created_oldest",
 }
 
 # Color normalization: aliases -> canonical slug
@@ -352,9 +362,12 @@ def _extract_product_slug(path: str) -> str:
     m = re.match(r"^(?:buy|listings)/(.+)$", path, re.IGNORECASE)
     if m:
         slug = m.group(1).strip("/")
-        # Remove any trailing sub-paths that aren't part of product slug
+        # Strip trailing carrier segment from path.
         # e.g., /buy/apple-iphone-15/unlocked → "apple-iphone-15"
         # But keep full slugs like "apple-iphone-15-pro-max"
+        parts = slug.split("/")
+        if len(parts) > 1 and parts[-1].lower() in CARRIER_MAP:
+            slug = "/".join(parts[:-1])
         return _normalize_slug(slug)
 
     return ""
@@ -400,7 +413,9 @@ def parse_swappa_url(url: str) -> dict[str, Any]:
     """Parse a Swappa URL into normalized components.
 
     Returns dict with keys:
-      product_slug, carrier, condition, storage, color, sort, model
+      product_slug, carrier, condition, storage, color, sort, model,
+      modeln, edition, memory, processor,
+      exclude_businesses, accepts_stripe, international, phone_check_certified
     """
     parsed = urlparse(url.strip())
     query = parse_qs(parsed.query, keep_blank_values=True)
@@ -416,6 +431,16 @@ def parse_swappa_url(url: str) -> dict[str, Any]:
         "color": "",
         "sort": "",
         "model": "",
+        # Extended filters (new CSV params)
+        "modeln": "",       # base64-encoded model number (e.g. A2848)
+        "edition": "",      # base64-encoded edition (e.g. mmWave 5G)
+        "memory": "",       # RAM for laptops (e.g. 16gb, 24gb)
+        "processor": "",    # CPU for laptops (e.g. apple-m2)
+        # Checkbox filters
+        "exclude_businesses": "",
+        "accepts_stripe": "",
+        "international": "",
+        "phone_check_certified": "",
         # Page type
         "page_type": "",  # "buy" | "listings" | "other"
     }
@@ -457,6 +482,20 @@ def parse_swappa_url(url: str) -> dict[str, Any]:
     # Model (sub-model filter for multi-model pages)
     result["model"] = _get_param(query, "model").lower().strip()
 
+    # Extended filters — base64-encoded params (case-sensitive, exact match)
+    result["modeln"] = _get_param(query, "modeln")
+    result["edition"] = _get_param(query, "edition")
+
+    # Laptop-specific filters
+    result["memory"] = _normalize_storage(_get_param(query, "memory"))
+    result["processor"] = _get_param(query, "processor").lower().strip()
+
+    # Checkbox filters (value is always "on" or absent)
+    result["exclude_businesses"] = _get_param(query, "exclude_businesses")
+    result["accepts_stripe"] = _get_param(query, "accepts_stripe")
+    result["international"] = _get_param(query, "international")
+    result["phone_check_certified"] = _get_param(query, "phone_check_certified")
+
     return result
 
 
@@ -483,6 +522,10 @@ class SwappaUrlMatch(BaseMetric):
     - Color: case-insensitive exact match
     - Sort: alias-normalized exact match
     - /buy/ and /listings/ pages are treated equivalently for product slug
+    - modeln/edition: case-sensitive exact match (base64 values)
+    - memory/processor: normalized exact match
+    - Checkboxes (exclude_businesses, accepts_stripe, international,
+      phone_check_certified): exact match on 'on'
     """
 
     def __init__(self, gt_url: str | list[str]) -> None:
@@ -704,6 +747,77 @@ class SwappaUrlMatch(BaseMetric):
                         f"Model: '{agent['model']}' vs '{gt['model']}'"
                     )
                     return False, details
+
+            # 8. Model number (base64-encoded, case-sensitive)
+            if gt["modeln"]:
+                if not agent["modeln"]:
+                    details["mismatches"].append(
+                        f"Model number missing (expected '{gt['modeln']}')"
+                    )
+                    return False, details
+                if agent["modeln"] != gt["modeln"]:
+                    details["mismatches"].append(
+                        f"Model number: '{agent['modeln']}' vs '{gt['modeln']}'"
+                    )
+                    return False, details
+
+            # 9. Edition (base64-encoded, case-sensitive)
+            if gt["edition"]:
+                if not agent["edition"]:
+                    details["mismatches"].append(
+                        f"Edition missing (expected '{gt['edition']}')"
+                    )
+                    return False, details
+                if agent["edition"] != gt["edition"]:
+                    details["mismatches"].append(
+                        f"Edition: '{agent['edition']}' vs '{gt['edition']}'"
+                    )
+                    return False, details
+
+            # 10. Memory (for laptops)
+            if gt["memory"]:
+                if not agent["memory"]:
+                    details["mismatches"].append(
+                        f"Memory missing (expected '{gt['memory']}')"
+                    )
+                    return False, details
+                if agent["memory"] != gt["memory"]:
+                    details["mismatches"].append(
+                        f"Memory: '{agent['memory']}' vs '{gt['memory']}'"
+                    )
+                    return False, details
+
+            # 11. Processor (for laptops)
+            if gt["processor"]:
+                if not agent["processor"]:
+                    details["mismatches"].append(
+                        f"Processor missing (expected '{gt['processor']}')"
+                    )
+                    return False, details
+                if agent["processor"] != gt["processor"]:
+                    details["mismatches"].append(
+                        f"Processor: '{agent['processor']}' vs '{gt['processor']}'"
+                    )
+                    return False, details
+
+            # 12-15. Checkbox filters (exact "on" match)
+            for checkbox_field in [
+                "exclude_businesses",
+                "accepts_stripe",
+                "international",
+                "phone_check_certified",
+            ]:
+                if gt[checkbox_field]:
+                    if not agent[checkbox_field]:
+                        details["mismatches"].append(
+                            f"{checkbox_field} missing (expected '{gt[checkbox_field]}')"
+                        )
+                        return False, details
+                    if agent[checkbox_field] != gt[checkbox_field]:
+                        details["mismatches"].append(
+                            f"{checkbox_field}: '{agent[checkbox_field]}' vs '{gt[checkbox_field]}'"
+                        )
+                        return False, details
 
             return True, details
 

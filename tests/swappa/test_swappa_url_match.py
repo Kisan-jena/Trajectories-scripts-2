@@ -137,8 +137,8 @@ class TestNormalizeCarrier:
         assert _normalize_carrier("uscellular") == "us-cellular"
 
     def test_mint_mobile_variants(self):
-        assert _normalize_carrier("mint-mobile") == "mint-mobile"
-        assert _normalize_carrier("mintmobile") == "mint-mobile"
+        assert _normalize_carrier("mint-mobile") == "mint"
+        assert _normalize_carrier("mintmobile") == "mint"
 
     def test_google_fi(self):
         assert _normalize_carrier("google-fi") == "google-fi"
@@ -162,6 +162,12 @@ class TestNormalizeCarrier:
     def test_red_pocket(self):
         assert _normalize_carrier("red-pocket") == "red-pocket"
         assert _normalize_carrier("red_pocket") == "red-pocket"
+
+    def test_mint_canonical(self):
+        """carrier=mint is canonical; mint-mobile is an alias for mint."""
+        assert _normalize_carrier("mint") == "mint"
+        assert _normalize_carrier("mint-mobile") == "mint"
+        assert _normalize_carrier("mintmobile") == "mint"
 
 
 class TestNormalizeCondition:
@@ -194,16 +200,17 @@ class TestNormalizeSort:
     def test_canonical_values(self):
         assert _normalize_sort("price_low") == "price_low"
         assert _normalize_sort("price_high") == "price_high"
-        assert _normalize_sort("newest") == "newest"
-        assert _normalize_sort("oldest") == "oldest"
+        assert _normalize_sort("listing_created_newest") == "listing_created_newest"
+        assert _normalize_sort("listing_created_oldest") == "listing_created_oldest"
 
     def test_aliases(self):
         assert _normalize_sort("cheapest") == "price_low"
         assert _normalize_sort("cheapest first") == "price_low"
         assert _normalize_sort("price (low)") == "price_low"
         assert _normalize_sort("price (high)") == "price_high"
-        assert _normalize_sort("newest first") == "newest"
-        assert _normalize_sort("most recent") == "newest"
+        assert _normalize_sort("newest") == "listing_created_newest"
+        assert _normalize_sort("newest first") == "listing_created_newest"
+        assert _normalize_sort("most recent") == "listing_created_newest"
 
     def test_case_insensitive(self):
         assert _normalize_sort("PRICE_LOW") == "price_low"
@@ -212,11 +219,11 @@ class TestNormalizeSort:
         assert _normalize_sort("") == ""
 
     def test_oldest_aliases(self):
-        assert _normalize_sort("oldest") == "oldest"
-        assert _normalize_sort("oldest_first") == "oldest"
-        assert _normalize_sort("oldest first") == "oldest"
-        assert _normalize_sort("least_recent") == "oldest"
-        assert _normalize_sort("listing created (oldest)") == "oldest"
+        assert _normalize_sort("oldest") == "listing_created_oldest"
+        assert _normalize_sort("oldest_first") == "listing_created_oldest"
+        assert _normalize_sort("oldest first") == "listing_created_oldest"
+        assert _normalize_sort("least_recent") == "listing_created_oldest"
+        assert _normalize_sort("listing created (oldest)") == "listing_created_oldest"
 
 
 class TestNormalizeStorage:
@@ -297,7 +304,11 @@ class TestExtractProductSlug:
 
     def test_with_sub_path(self):
         slug = _extract_product_slug("/buy/apple-iphone-15/unlocked")
-        assert "apple-iphone-15" in slug
+        assert slug == "apple-iphone-15"  # carrier stripped
+
+    def test_with_sub_path_non_carrier(self):
+        slug = _extract_product_slug("/buy/apple-iphone-15-pro-max")
+        assert slug == "apple-iphone-15-pro-max"  # not a carrier, kept
 
     def test_category(self):
         assert _extract_product_slug("/buy/phones") == "phones"
@@ -523,9 +534,24 @@ class TestSortMatching:
         assert result.score == 1.0
 
     @pytest.mark.asyncio
+    async def test_sort_listing_created_newest(self):
+        m = SwappaUrlMatch("https://swappa.com/listings/apple-iphone-15?sort=listing_created_newest")
+        await m.update(url="https://swappa.com/listings/apple-iphone-15?sort=listing_created_newest")
+        result = await m.compute()
+        assert result.score == 1.0
+
+    @pytest.mark.asyncio
+    async def test_sort_alias_newest_matches_listing_created(self):
+        """Agent URL using 'newest' alias should match GT 'listing_created_newest'."""
+        m = SwappaUrlMatch("https://swappa.com/listings/apple-iphone-15?sort=listing_created_newest")
+        await m.update(url="https://swappa.com/listings/apple-iphone-15?sort=newest")
+        result = await m.compute()
+        assert result.score == 1.0
+
+    @pytest.mark.asyncio
     async def test_sort_mismatch(self):
         m = SwappaUrlMatch("https://swappa.com/listings/apple-iphone-15?sort=price_low")
-        await m.update(url="https://swappa.com/listings/apple-iphone-15?sort=newest")
+        await m.update(url="https://swappa.com/listings/apple-iphone-15?sort=listing_created_newest")
         result = await m.compute()
         assert result.score == 0.0
 
@@ -723,5 +749,126 @@ class TestEdgeCases:
     async def test_www_domain(self):
         m = SwappaUrlMatch("https://swappa.com/buy/apple-iphone-15")
         await m.update(url="https://www.swappa.com/buy/apple-iphone-15")
+        result = await m.compute()
+        assert result.score == 1.0
+
+
+# =============================================================================
+# New Params Tests (modeln, edition, checkboxes, memory, processor)
+# =============================================================================
+
+
+class TestNewParams:
+    """Test new parameters added for team CSV compatibility."""
+
+    @pytest.mark.asyncio
+    async def test_modeln_match(self):
+        gt = "https://swappa.com/listings/apple-iphone-15-pro?carrier=verizon&modeln=QTI4NDg"
+        m = SwappaUrlMatch(gt)
+        await m.update(url=gt)
+        result = await m.compute()
+        assert result.score == 1.0
+
+    @pytest.mark.asyncio
+    async def test_modeln_missing_fails(self):
+        gt = "https://swappa.com/listings/apple-iphone-15-pro?carrier=verizon&modeln=QTI4NDg"
+        m = SwappaUrlMatch(gt)
+        await m.update(url="https://swappa.com/listings/apple-iphone-15-pro?carrier=verizon")
+        result = await m.compute()
+        assert result.score == 0.0
+
+    @pytest.mark.asyncio
+    async def test_edition_match(self):
+        gt = "https://swappa.com/listings/google-pixel-8-pro?edition=bW1XYXZlIDVH"
+        m = SwappaUrlMatch(gt)
+        await m.update(url=gt)
+        result = await m.compute()
+        assert result.score == 1.0
+
+    @pytest.mark.asyncio
+    async def test_edition_missing_fails(self):
+        gt = "https://swappa.com/listings/google-pixel-8-pro?edition=bW1XYXZlIDVH"
+        m = SwappaUrlMatch(gt)
+        await m.update(url="https://swappa.com/listings/google-pixel-8-pro")
+        result = await m.compute()
+        assert result.score == 0.0
+
+    @pytest.mark.asyncio
+    async def test_exclude_businesses_match(self):
+        gt = "https://swappa.com/listings/apple-watch-series-8-41mm?exclude_businesses=on"
+        m = SwappaUrlMatch(gt)
+        await m.update(url=gt)
+        result = await m.compute()
+        assert result.score == 1.0
+
+    @pytest.mark.asyncio
+    async def test_exclude_businesses_missing_fails(self):
+        gt = "https://swappa.com/listings/apple-watch-series-8-41mm?exclude_businesses=on"
+        m = SwappaUrlMatch(gt)
+        await m.update(url="https://swappa.com/listings/apple-watch-series-8-41mm")
+        result = await m.compute()
+        assert result.score == 0.0
+
+    @pytest.mark.asyncio
+    async def test_phone_check_certified_match(self):
+        gt = "https://swappa.com/listings/samsung-galaxy-s23-ultra?phone_check_certified=on"
+        m = SwappaUrlMatch(gt)
+        await m.update(url=gt)
+        result = await m.compute()
+        assert result.score == 1.0
+
+    @pytest.mark.asyncio
+    async def test_accepts_stripe_match(self):
+        gt = "https://swappa.com/listings/apple-iphone-11-pro-max?accepts_stripe=on"
+        m = SwappaUrlMatch(gt)
+        await m.update(url=gt)
+        result = await m.compute()
+        assert result.score == 1.0
+
+    @pytest.mark.asyncio
+    async def test_international_match(self):
+        gt = "https://swappa.com/listings/apple-iphone-11-pro-max?international=on"
+        m = SwappaUrlMatch(gt)
+        await m.update(url=gt)
+        result = await m.compute()
+        assert result.score == 1.0
+
+    @pytest.mark.asyncio
+    async def test_memory_match(self):
+        gt = "https://swappa.com/listings/macbook-air-2022-13?memory=16gb"
+        m = SwappaUrlMatch(gt)
+        await m.update(url=gt)
+        result = await m.compute()
+        assert result.score == 1.0
+
+    @pytest.mark.asyncio
+    async def test_processor_match(self):
+        gt = "https://swappa.com/listings/apple-macbook-air-2023-15?processor=apple-m2"
+        m = SwappaUrlMatch(gt)
+        await m.update(url=gt)
+        result = await m.compute()
+        assert result.score == 1.0
+
+    @pytest.mark.asyncio
+    async def test_full_laptop_combo(self):
+        gt = "https://swappa.com/listings/apple-macbook-air-2023-15?condition=mint&memory=24gb&processor=apple-m2&sort=price_low"
+        m = SwappaUrlMatch(gt)
+        await m.update(url=gt)
+        result = await m.compute()
+        assert result.score == 1.0
+
+    @pytest.mark.asyncio
+    async def test_full_combo_with_checkboxes(self):
+        gt = "https://swappa.com/listings/apple-iphone-15-pro?carrier=verizon&color=blue&storage=256gb&modeln=QTI4NDg&international=on"
+        m = SwappaUrlMatch(gt)
+        await m.update(url=gt)
+        result = await m.compute()
+        assert result.score == 1.0
+
+    @pytest.mark.asyncio
+    async def test_carrier_mint_alias(self):
+        gt = "https://swappa.com/listings/apple-iphone-15?carrier=mint"
+        m = SwappaUrlMatch(gt)
+        await m.update(url="https://swappa.com/listings/apple-iphone-15?carrier=mint-mobile")
         result = await m.compute()
         assert result.score == 1.0

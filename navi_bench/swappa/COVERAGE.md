@@ -136,12 +136,20 @@ https://swappa.com/listings/apple-iphone-15
 
 | Filter | Parameter | Values / Format | Verifier Handling |
 | :--- | :--- | :--- | :--- |
-| **Carrier** | `carrier` | Slug string (see S4) | Alias-normalized exact match |
+| **Carrier** | `carrier` | Slug string (see §4) | Alias-normalized exact match |
 | **Condition** | `condition` | `new`, `mint`, `good`, `fair` | Alias-normalized exact match |
 | **Storage** | `storage` | `128gb`, `256gb`, `512gb`, `1tb` | Alias-normalized exact match |
-| **Color** | `color` | Lowercase slug (see S7) | Case-insensitive exact match |
-| **Sort Order** | `sort` | `price_low`, `price_high`, `newest`, `oldest` | Alias-normalized exact match |
+| **Color** | `color` | Lowercase slug (see §7) | Case-insensitive exact match |
+| **Sort Order** | `sort` | `price_low`, `price_high`, `listing_created_newest`, `listing_created_oldest` | Alias-normalized exact match |
 | **Model** | `model` | Device model number slug | Exact match |
+| **Model Number** | `modeln` | Base64-encoded (e.g. `QTI4NDg` = A2848) | Case-sensitive exact match |
+| **Edition** | `edition` | Base64-encoded (e.g. `bW1XYXZlIDVH` = mmWave 5G) | Case-sensitive exact match |
+| **Memory** | `memory` | RAM capacity slug (e.g. `16gb`, `24gb`) | Alias-normalized exact match |
+| **Processor** | `processor` | CPU slug (e.g. `apple-m2`) | Case-insensitive exact match |
+| **Exclude Businesses** | `exclude_businesses` | `on` (checkbox) | Exact match on `on` |
+| **Accepts Credit Cards** | `accepts_stripe` | `on` (checkbox) | Exact match on `on` |
+| **International Shipping** | `international` | `on` (checkbox) | Exact match on `on` |
+| **PhoneCheck Certified** | `phone_check_certified` | `on` (checkbox) | Exact match on `on` |
 
 > [!NOTE]
 > Swappa does NOT have a keyword search in URLs. Unlike Mercari (`keyword=`), Swappa uses
@@ -163,7 +171,7 @@ https://swappa.com/listings/apple-iphone-15
 | Sprint | `sprint` | Merged with T-Mobile |
 | Boost | `boost` | Boost Mobile |
 | Cricket | `cricket` | |
-| Mint Mobile | `mint-mobile` | |
+| Mint Mobile | `mint` | Canonical is `mint` (not `mint-mobile`) |
 | US Cellular | `us-cellular` | |
 | C-Spire | `c-spire` | Regional carrier |
 | Unlocked Non-US | `unlocked-non-us` | International models |
@@ -184,7 +192,7 @@ https://swappa.com/listings/apple-iphone-15
 | :--- | :--- |
 | `t-mobile`, `tmobile` | `tmobile` |
 | `us-cellular`, `us_cellular`, `uscellular` | `us-cellular` |
-| `mint-mobile`, `mint_mobile`, `mintmobile` | `mint-mobile` |
+| `mint`, `mint-mobile`, `mint_mobile`, `mintmobile` | `mint` |
 | `google-fi`, `google_fi`, `googlefi` | `google-fi` |
 | `c-spire`, `c_spire`, `cspire` | `c-spire` |
 | `at-t` | `att` |
@@ -245,8 +253,8 @@ The verifier checks **both** query params and path segments. Query params take p
 | :--- | :--- |
 | Price (Low) | `price_low` |
 | Price (High) | `price_high` |
-| Listing Created (Newest) | `newest` |
-| Listing Created (Oldest) | `oldest` |
+| Listing Created (Newest) | `listing_created_newest` |
+| Listing Created (Oldest) | `listing_created_oldest` |
 
 ### Sidebar Dropdown (Browser-Verified)
 
@@ -268,8 +276,8 @@ The verifier checks **both** query params and path segments. Query params take p
 | :--- | :--- |
 | `cheapest`, `cheapest first`, `price (low)`, `price_asc`, `price_min` | `price_low` |
 | `most expensive`, `price (high)`, `price_desc`, `price_max` | `price_high` |
-| `newest first`, `most recent`, `listing created (newest)` | `newest` |
-| `oldest first`, `least_recent`, `listing created (oldest)` | `oldest` |
+| `newest`, `newest first`, `most recent`, `listing created (newest)` | `listing_created_newest` |
+| `oldest`, `oldest first`, `least_recent`, `listing created (oldest)` | `listing_created_oldest` |
 
 ---
 
@@ -356,7 +364,7 @@ These are Apple model numbers for different regional/carrier variants.
 
 ---
 
-## 10. Checkbox Filters (Browser-Verified — NOT in URL)
+## 10. Checkbox Filters (Browser-Verified — URL Confirmed)
 
 Below the dropdown filters, the sidebar shows checkbox options:
 
@@ -368,10 +376,74 @@ Below the dropdown filters, the sidebar shows checkbox options:
 [ ] International Shipping
 ```
 
-> [!WARNING]
-> These checkboxes were observed in the sidebar but their URL encoding has
-> **NOT been confirmed**. They are NOT included in the verifier until URL
-> encoding is verified.
+### URL Encoding (Confirmed via Team CSV, May 2026)
+
+| UI Label | Query Parameter | Value |
+| :--- | :--- | :--- |
+| Accepts Credit Cards | `accepts_stripe` | `on` |
+| Exclude Businesses | `exclude_businesses` | `on` |
+| PhoneCheck Certified | `phone_check_certified` | `on` |
+| International Shipping | `international` | `on` |
+
+> [!NOTE]
+> "One-Year Warranty" checkbox URL encoding has NOT been confirmed yet. It is not
+> currently used in any benchmark tasks.
+
+### Example URL with Checkboxes
+
+```
+https://swappa.com/listings/apple-iphone-11-pro-max?carrier=unlocked&accepts_stripe=on&international=on
+```
+
+---
+
+## 10b. Extended Filters (Model Number, Edition, Memory, Processor)
+
+These filters appear on device-specific pages and use special encoding:
+
+### Model Number (`modeln`)
+
+Base64-encoded hardware model identifiers (case-sensitive):
+
+| Decoded Value | `modeln` Base64 | Product |
+| :--- | :--- | :--- |
+| A2848 | `QTI4NDg` | iPhone 15 Pro (Verizon) |
+| A2772 - Cellular | `QTI3NzIgLSBDZWxsdWxhcg` | Apple Watch Series 8 41mm |
+
+### Edition (`edition`)
+
+Base64-encoded edition/variant identifiers (case-sensitive):
+
+| Decoded Value | `edition` Base64 | Product |
+| :--- | :--- | :--- |
+| mmWave 5G | `bW1XYXZlIDVH` | Google Pixel 8 Pro |
+| Lightning | `TGlnaHRuaW5n` | AirPods Pro 2nd Gen |
+
+> [!IMPORTANT]
+> `modeln` and `edition` values are **base64-encoded** and **case-sensitive**. The verifier
+> performs exact string comparison — no normalization is applied. These values are opaque
+> tokens generated by Swappa's frontend.
+
+### Memory (`memory`) — Laptop-Specific
+
+RAM capacity for laptop product pages:
+
+| UI Label | `memory` Value |
+| :--- | :--- |
+| 16 GB | `16gb` |
+| 24 GB | `24gb` |
+
+Normalization: Same rules as `storage` (case-insensitive, space removal).
+
+### Processor (`processor`) — Laptop-Specific
+
+CPU model for laptop product pages:
+
+| UI Label | `processor` Value |
+| :--- | :--- |
+| Apple M2 | `apple-m2` |
+
+Normalization: Case-insensitive, trimmed.
 
 ---
 
