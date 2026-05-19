@@ -40,8 +40,8 @@ def main():
         o, d = origins_easy[i-1], dests_easy[i-1]
         add_flight(
             tid=f"skyscanner/info_gathering/flights/easy/{i}", diff="easy", origin=o, dest=d,
-            task_desc=f"Find a direct flight from {o} to {d} on {{dateRange}}. Budget is under ₹25,000. Extract exact price.",
-            queries=[[{"require_direct": True, "max_price": 25000.0, "depart_dates": ["{dateRange}"]}]],
+            task_desc=f"Find a direct flight from {o} to {d} on {{dateRange}}. Budget is under \u20b925,000. Extract exact price.",
+            queries=[[{"require_direct": True, "max_price": 25000.0}]],
             hint="Use the Direct flights only filter.",
             values={"dateRange": f"in {i*2} days"}
         )
@@ -54,8 +54,8 @@ def main():
         o, d, a = origins_med[i-1], dests_med[i-1], airlines_med[i-1]
         add_flight(
             tid=f"skyscanner/info_gathering/flights/medium/{i}", diff="medium", origin=o, dest=d,
-            task_desc=f"Find flights from {o} to {d} on {{dateRange}}. Must fly {a}, max 1 stop, under ₹80,000.",
-            queries=[[{"max_stops": 1, "airlines": [a], "max_price": 80000.0, "depart_dates": ["{dateRange}"]}]],
+            task_desc=f"Find flights from {o} to {d} on {{dateRange}}. Must fly {a}, max 1 stop, under \u20b980,000.",
+            queries=[[{"max_stops": 1, "airlines": [a], "max_price": 80000.0}]],
             hint="Use Airlines and Stops filters.",
             values={"dateRange": f"in {i*4} days"}
         )
@@ -68,8 +68,8 @@ def main():
         a = random.choice(["British Airways", "Lufthansa", "Singapore Airlines", "Cathay Pacific", "Delta", "United"])
         add_flight(
             tid=f"skyscanner/info_gathering/flights/hard/{i}", diff="hard", origin=o, dest=d,
-            task_desc=f"Search for business class flights from {o} to {d} on {{dateRange}}. Fly with {a}, ensure it is direct, and keep it under ₹350,000.",
-            queries=[[{"require_direct": True, "airlines": [a], "max_price": 350000.0, "cabin_classes": ["business", "biz"], "depart_dates": ["{dateRange}"]}]],
+            task_desc=f"Search for business class flights from {o} to {d} on {{dateRange}}. Fly with {a}, ensure it is direct, and keep it under \u20b9350,000.",
+            queries=[[{"require_direct": True, "airlines": [a], "max_price": 350000.0, "cabin_classes": ["business", "biz"]}]],
             hint="Set cabin class, direct stops, specific airline, and ensure price is within budget.",
             values={"dateRange": f"in {i*3} days"}
         )

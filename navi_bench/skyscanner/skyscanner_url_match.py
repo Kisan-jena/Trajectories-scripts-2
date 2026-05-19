@@ -1211,9 +1211,12 @@ class SkyscannerInfoGathering(BaseMetric):
             if not any(d.lower() in info_dest for d in q_destinations): return False
 
         if q_depart_dates := query.get("depart_dates"):
-            # Usually in YYYY-MM-DD or YYMMDD. Compare without hyphens nicely
+            # depart_dates are navigational — they tell the agent WHEN to search, not what to
+            # extract from listings. Individual listing cards don't expose a reliable departDate
+            # field. If the info dict has a departDate, do a loose match; otherwise skip.
             dep = (info.get("departDate") or "").replace("-", "")
-            if not any(qd.replace("-", "") in dep for qd in q_depart_dates): return False
+            if dep and not any(qd.replace("-", "") in dep for qd in q_depart_dates):
+                return False
 
         if q_airlines := query.get("airlines"):
             ticket_airline = (info.get("airline") or "").lower()
