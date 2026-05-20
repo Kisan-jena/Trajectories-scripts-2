@@ -1305,19 +1305,10 @@ def generate_info_gathering_task_config(
         placeholder_map, current_date = initialize_placeholder_map(user_metadata, values)
         task = render_task_statement(task, placeholder_map)
         
-        # Provide resolved dates to all queries if dateRange exists
-        date_tuple = placeholder_map.get("dateRange")
-        if date_tuple and isinstance(date_tuple, tuple) and len(date_tuple) == 2:
-            _, resolved_iso_dates = date_tuple 
-            if resolved_iso_dates:
-                for alternative_conditions in queries:
-                    for query in alternative_conditions:
-                        if "depart_dates" in query and query["depart_dates"] == ["{dateRange}"]:
-                            query["depart_dates"] = resolved_iso_dates
-                        if "check_in_dates" in query and query["check_in_dates"] == ["{dateRange}"]:
-                            query["check_in_dates"] = resolved_iso_dates
-                        if "pickup_dates" in query and query["pickup_dates"] == ["{dateRange}"]:
-                            query["pickup_dates"] = resolved_iso_dates
+        # Dates are resolved into the task prompt via render_task_statement above.
+        # For info-gathering, dates are navigational (they tell the agent WHEN to
+        # search) — they are NOT injected into verifier queries because individual
+        # listing cards don't reliably expose extractable date fields.
                         
     eval_config = {
         "_target_": get_import_path(SkyscannerInfoGathering),

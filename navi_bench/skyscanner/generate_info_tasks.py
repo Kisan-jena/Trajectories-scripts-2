@@ -119,9 +119,9 @@ def main():
         loc = ["Dubai", "Bangkok", "Istanbul", "Amsterdam"][i-1]
         add_hotel(
             tid=f"skyscanner/info_gathering/hotels/medium/{i}", diff="medium", location=loc,
-            task_desc=f"Search for a top-rated hotel in {loc} on {{dateRange}}. Must have a minimum guest rating of 9.0, under ₹30,000/night.",
-            queries=[[{"cities": [loc], "min_score": 9.0, "max_price": 30000.0}]],
-            hint="Use guest rating filter > 9 or sort by rating.",
+            task_desc=f"Search for a top-rated hotel in {loc} on {{dateRange}}. Must have a minimum guest rating of 4.5/5, under \u20b930,000/night.",
+            queries=[[{"cities": [loc], "min_score": 4.5, "max_price": 30000.0}]],
+            hint="Use guest rating filter >= 4.5 or sort by rating.",
             values={"dateRange": f"in {i*2} weeks"}
         )
 
@@ -130,9 +130,9 @@ def main():
         loc = random.choice(["Paris", "London", "Tokyo", "New York", "Singapore", "Sydney"])
         add_hotel(
             tid=f"skyscanner/info_gathering/hotels/hard/{i}", diff="hard", location=loc,
-            task_desc=f"Find a 5-star luxury hotel in {loc} checking in on {{dateRange}} for 1 night. Needs an Exceptional guest rating (9.0+) and keep it under ₹80,000 total.",
-            queries=[[{"cities": [loc], "min_stars": 5, "min_score": 9.0, "max_price": 80000.0}]],
-            hint="Set 5 stars, guest score 9+, and enforce price constraints.",
+            task_desc=f"Find a 5-star luxury hotel in {loc} checking in on {{dateRange}} for 1 night. Needs an Exceptional guest rating (4.5+/5) and keep it under \u20b980,000 total.",
+            queries=[[{"cities": [loc], "min_stars": 5, "min_score": 4.5, "max_price": 80000.0}]],
+            hint="Set 5 stars, guest score 4.5+, and enforce price constraints.",
             values={"dateRange": f"in {i+5} days"}
         )
 

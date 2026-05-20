@@ -387,8 +387,10 @@ def parse_mercari_url(url: str) -> dict[str, Any]:
     raw_deals = _get_param(query, "withDealsOnly", "withdealsonly")
     result["with_deals_only"] = raw_deals.lower().strip() if raw_deals else ""
 
-    # Status
-    raw_status = _get_param(query, "statusIds", "statusids")
+    # Status (supports both 'statusIds' and 'itemStatuses' param names)
+    raw_status = _get_param(
+        query, "statusIds", "statusids", "itemStatuses", "itemstatuses"
+    )
     result["status_ids"] = _normalize_status(raw_status)
 
     # Color

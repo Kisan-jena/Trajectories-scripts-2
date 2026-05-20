@@ -359,17 +359,26 @@ Deals items show a discount percentage badge on the listing card (e.g., "10%", "
 
 ## 10. Status Filter (Browser-Verified)
 
-| UI Label | `statusIds` Value |
+Mercari uses **two different parameter names** for the status filter depending on context:
+
+| Parameter Name | Context |
+| :--- | :--- |
+| `statusIds` | Standard search filter |
+| `itemStatuses` | Alternative parameter (observed in some URL patterns) |
+
+Both are parsed and normalized identically by the verifier.
+
+| UI Label | Value |
 | :--- | :--- |
 | On sale (active) | `1` |
 | Sold out | `2` |
 
 The verifier accepts aliases: `on_sale`, `active` → `"1"`, `sold_out`, `sold` → `"2"`
 
-> [!NOTE]
-> The status filter is primarily available in the **mobile filter drawer**.
-> On desktop, it may not be visible in the sidebar. The verifier supports
-> it regardless of UI visibility.
+> [!WARNING]
+> Both `statusIds=1` and `itemStatuses=1` are valid and equivalent. The verifier
+> accepts either parameter name. GT URLs may use either form. This dual naming
+> was discovered during benchmark task validation (May 2026).
 
 ---
 

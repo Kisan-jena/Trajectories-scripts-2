@@ -130,16 +130,27 @@
         },
 
         /**
-         * Parse review score from text (e.g., "8.5/10", "Excellent 9.2").
+         * Parse review score from text.
+         * Skyscanner uses a 1–5 scale (e.g., "4.5 / 5", "Excellent 4.3").
+         * Returns the score on the NATIVE 0–5 scale.
+         * If a /10 format is encountered (partner data), normalizes to 0–5.
          */
         reviewScore: (text) => {
             if (!text) return null;
-            const match = text.match(/(\d+(?:\.\d+)?)\s*\/\s*10/);
-            if (match) return parseFloat(match[1]);
-            const match2 = text.match(/(?:excellent|very good|good|okay|poor)?\s*(\d+(?:\.\d+)?)/i);
+            // Match "X / 5" (Skyscanner's native scale)
+            const match5 = text.match(/(\d+(?:\.\d+)?)\s*\/\s*5/);
+            if (match5) return parseFloat(match5[1]);
+            // Match "X / 10" (partner/legacy data) — normalize to 5-scale
+            const match10 = text.match(/(\d+(?:\.\d+)?)\s*\/\s*10/);
+            if (match10) return parseFloat(match10[1]) / 2;
+            // Fallback: raw number with optional label (e.g., "Excellent 4.3")
+            const match2 = text.match(/(?:exceptional|excellent|very good|good|okay|poor)?\s*(\d+(?:\.\d+)?)/i);
             if (match2) {
                 const score = parseFloat(match2[1]);
-                if (score <= 10) return score;
+                // If score <= 5, assume native 5-point scale
+                if (score <= 5) return score;
+                // If score <= 10, assume 10-point and normalize
+                if (score <= 10) return score / 2;
             }
             return null;
         }
