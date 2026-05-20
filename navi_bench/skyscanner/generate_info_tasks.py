@@ -40,8 +40,8 @@ def main():
         o, d = origins_easy[i-1], dests_easy[i-1]
         add_flight(
             tid=f"skyscanner/info_gathering/flights/easy/{i}", diff="easy", origin=o, dest=d,
-            task_desc=f"Find a direct flight from {o} to {d} on {{dateRange}}. Budget is under \u20b925,000. Extract exact price.",
-            queries=[[{"require_direct": True, "max_price": 25000.0}]],
+            task_desc=f"Find a direct flight from {o} to {d} on {{dateRange}}. Budget is under $300. Extract exact price.",
+            queries=[[{"require_direct": True, "max_price": 300.0}]],
             hint="Use the Direct flights only filter.",
             values={"dateRange": f"in {i*2} days"}
         )
@@ -54,8 +54,8 @@ def main():
         o, d, a = origins_med[i-1], dests_med[i-1], airlines_med[i-1]
         add_flight(
             tid=f"skyscanner/info_gathering/flights/medium/{i}", diff="medium", origin=o, dest=d,
-            task_desc=f"Find flights from {o} to {d} on {{dateRange}}. Must fly {a}, max 1 stop, under \u20b980,000.",
-            queries=[[{"max_stops": 1, "airlines": [a], "max_price": 80000.0}]],
+            task_desc=f"Find flights from {o} to {d} on {{dateRange}}. Must fly {a}, max 1 stop, under $950.",
+            queries=[[{"max_stops": 1, "airlines": [a], "max_price": 950.0}]],
             hint="Use Airlines and Stops filters.",
             values={"dateRange": f"in {i*4} days"}
         )
@@ -68,8 +68,8 @@ def main():
         a = random.choice(["British Airways", "Lufthansa", "Singapore Airlines", "Cathay Pacific", "Delta", "United"])
         add_flight(
             tid=f"skyscanner/info_gathering/flights/hard/{i}", diff="hard", origin=o, dest=d,
-            task_desc=f"Search for business class flights from {o} to {d} on {{dateRange}}. Fly with {a}, ensure it is direct, and keep it under \u20b9350,000.",
-            queries=[[{"require_direct": True, "airlines": [a], "max_price": 350000.0, "cabin_classes": ["business", "biz"]}]],
+            task_desc=f"Search for business class flights from {o} to {d} on {{dateRange}}. Fly with {a}, ensure it is direct, and keep it under $4,200.",
+            queries=[[{"require_direct": True, "airlines": [a], "max_price": 4200.0, "cabin_classes": ["business", "biz"]}]],
             hint="Set cabin class, direct stops, specific airline, and ensure price is within budget.",
             values={"dateRange": f"in {i*3} days"}
         )
@@ -108,8 +108,8 @@ def main():
         loc = ["Rome", "Madrid", "Lisbon"][i-1]
         add_hotel(
             tid=f"skyscanner/info_gathering/hotels/easy/{i}", diff="easy", location=loc,
-            task_desc=f"Find a hotel in {loc} on {{dateRange}}. Minimum 4 stars, under ₹15,000/night.",
-            queries=[[{"cities": [loc], "min_stars": 4, "max_price": 15000.0}]],
+            task_desc=f"Find a hotel in {loc} on {{dateRange}}. Minimum 4 stars, under $180/night.",
+            queries=[[{"cities": [loc], "min_stars": 4, "max_price": 180.0}]],
             hint="Set min 4 stars and ensure it's under the max budget.",
             values={"dateRange": f"in {i*5} days"}
         )
@@ -119,8 +119,8 @@ def main():
         loc = ["Dubai", "Bangkok", "Istanbul", "Amsterdam"][i-1]
         add_hotel(
             tid=f"skyscanner/info_gathering/hotels/medium/{i}", diff="medium", location=loc,
-            task_desc=f"Search for a top-rated hotel in {loc} on {{dateRange}}. Must have a minimum guest rating of 4.5/5, under \u20b930,000/night.",
-            queries=[[{"cities": [loc], "min_score": 4.5, "max_price": 30000.0}]],
+            task_desc=f"Search for a top-rated hotel in {loc} on {{dateRange}}. Must have a minimum guest rating of 4.5/5, under $350/night.",
+            queries=[[{"cities": [loc], "min_score": 4.5, "max_price": 350.0}]],
             hint="Use guest rating filter >= 4.5 or sort by rating.",
             values={"dateRange": f"in {i*2} weeks"}
         )
@@ -130,8 +130,8 @@ def main():
         loc = random.choice(["Paris", "London", "Tokyo", "New York", "Singapore", "Sydney"])
         add_hotel(
             tid=f"skyscanner/info_gathering/hotels/hard/{i}", diff="hard", location=loc,
-            task_desc=f"Find a 5-star luxury hotel in {loc} checking in on {{dateRange}} for 1 night. Needs an Exceptional guest rating (4.5+/5) and keep it under \u20b980,000 total.",
-            queries=[[{"cities": [loc], "min_stars": 5, "min_score": 4.5, "max_price": 80000.0}]],
+            task_desc=f"Find a 5-star luxury hotel in {loc} checking in on {{dateRange}} for 1 night. Needs an Exceptional guest rating (4.5+/5) and keep it under $950 total.",
+            queries=[[{"cities": [loc], "min_stars": 5, "min_score": 4.5, "max_price": 950.0}]],
             hint="Set 5 stars, guest score 4.5+, and enforce price constraints.",
             values={"dateRange": f"in {i+5} days"}
         )
@@ -170,8 +170,8 @@ def main():
         loc = ["Miami", "Los Angeles", "Las Vegas", "Denver"][i-1]
         add_car(
             tid=f"skyscanner/info_gathering/carhire/easy/{i}", diff="easy", location=loc,
-            task_desc=f"Find a car hire at {loc} airport (MIA) on {{dateRange}}. I need an SUV under ₹25,000 total.",
-            queries=[[{"car_types": ["SUV"], "max_price": 25000.0}]],
+            task_desc=f"Find a car hire at {loc} airport on {{dateRange}}. I need an SUV under $300 total.",
+            queries=[[{"car_types": ["SUV"], "max_price": 300.0}]],
             hint="Select SUV car type and apply a price budget.",
             values={"dateRange": f"in {i*3} days"}
         )
@@ -181,8 +181,8 @@ def main():
         loc = ["Orlando", "Honolulu", "Cancun"][i-1]
         add_car(
             tid=f"skyscanner/info_gathering/carhire/medium/{i}", diff="medium", location=loc,
-            task_desc=f"Search for a rental car in {loc} on {{dateRange}}. I need a large vehicle with at least 7 seats, under ₹50,000.",
-            queries=[[{"min_passengers": 7, "max_price": 50000.0}]],
+            task_desc=f"Search for a rental car in {loc} on {{dateRange}}. I need a large vehicle with at least 7 seats, under $600.",
+            queries=[[{"min_passengers": 7, "max_price": 600.0}]],
             hint="Use the 7+ passenger capacity filter.",
             values={"dateRange": f"in {i*2} weeks"}
         )
