@@ -25,11 +25,12 @@ from navi_bench.base import BaseMetric, BaseTaskConfig, UserMetadata, get_import
 class ZillowVerifierResult(BaseModel):
     """Result of Zillow URL verification."""
 
-    score: float  # 0.0 or 1.0
-    match: bool
-    agent_url: str
-    ground_truth_url: str
+    score: float  # 0.0 to 1.0 (partial coverage supported)
+    match: bool  # True only if ALL required GT groups are covered
+    agent_url: str  # Last agent URL (legacy compat)
+    ground_truth_url: str  # First GT URL (legacy compat)
     details: dict  # Detailed comparison results
+    coverage: str = ""  # e.g. "2/3" for partial scoring
 
 
 class ZillowUrlMatch(BaseMetric):
@@ -121,8 +122,9 @@ class ZillowUrlMatch(BaseMetric):
 
     def __init__(
         self,
-        ground_truth_url: str,
+        gt_urls=None,
         *,
+        ground_truth_url: str | None = None,
         strict_location: bool = True,
         ignore_map_bounds: bool = True,
         ignore_pagination: bool = True,
@@ -130,23 +132,66 @@ class ZillowUrlMatch(BaseMetric):
         """
         Initialize the Zillow URL verifier.
 
+        Supports two input formats:
+
+        1. **New AND/OR format** (``gt_urls``):
+           ``gt_urls: list[list[str]]`` — outer list = AND (all groups
+           must be covered), inner list = OR (any alternative suffices).
+
+        2. **Legacy single-URL format** (``ground_truth_url``):
+           ``ground_truth_url: str`` — auto-converted to ``[[url]]``.
+
+        Backward-compatible: passing a single ``str`` or flat ``list[str]``
+        as ``gt_urls`` is also accepted and auto-normalized.
+
         Args:
-            ground_truth_url: The expected URL that the agent should navigate to.
+            gt_urls: Ground-truth URLs in AND/OR structure, or legacy
+                formats (str, list[str]) which are auto-normalized.
+            ground_truth_url: Legacy single GT URL (keyword-only).
             strict_location: If True, requires exact location match.
             ignore_map_bounds: If True, ignores mapBounds differences.
             ignore_pagination: If True, ignores pagination differences.
         """
-        self.ground_truth_url = ground_truth_url
+        # ------------------------------------------------------------------
+        # Normalize gt_urls to canonical list[list[str]] form
+        # ------------------------------------------------------------------
+        if gt_urls is not None and ground_truth_url is not None:
+            raise ValueError("Specify either 'gt_urls' or 'ground_truth_url', not both.")
+
+        if ground_truth_url is not None:
+            # Legacy single-URL kwarg → wrap
+            self.gt_urls: list[list[str]] = [[ground_truth_url]]
+        elif gt_urls is not None:
+            if isinstance(gt_urls, str):
+                # Single URL string passed positionally (backward compat)
+                self.gt_urls = [[gt_urls]]
+            elif isinstance(gt_urls, list) and gt_urls and isinstance(gt_urls[0], str):
+                # Flat list of alternatives: ["url1", "url2"] → [["url1", "url2"]]
+                self.gt_urls = [gt_urls]
+            elif isinstance(gt_urls, list):
+                # Full AND/OR format: [["url1", "url2"], ["url3"]]
+                self.gt_urls = gt_urls
+            else:
+                raise ValueError(f"Invalid gt_urls type: {type(gt_urls)}")
+        else:
+            raise ValueError("Must specify either 'gt_urls' or 'ground_truth_url'.")
+
+        # Legacy compat: expose the first GT URL as a simple property
+        self.ground_truth_url: str = self.gt_urls[0][0]
+
         self.strict_location = strict_location
         self.ignore_map_bounds = ignore_map_bounds
         self.ignore_pagination = ignore_pagination
 
-        self._agent_url: Optional[str] = None
-        self._parsed_gt = self._parse_zillow_url(ground_truth_url)
+        self._agent_urls: list[str] = []
+        self._parsed_gt_groups = [
+            [self._parse_zillow_url(url) for url in group]
+            for group in self.gt_urls
+        ]
 
     async def reset(self) -> None:
         """Reset the verifier state."""
-        self._agent_url = None
+        self._agent_urls = []
 
     @staticmethod
     def _is_valid_zillow_url(url: str) -> bool:
@@ -174,6 +219,9 @@ class ZillowUrlMatch(BaseMetric):
         """
         Update the verifier with the agent's current URL.
 
+        All valid Zillow URLs are accumulated so that AND-level groups
+        can each be matched against a different page the agent visited.
+
         Args:
             url: The current URL from the agent's browser.
         """
@@ -181,35 +229,102 @@ class ZillowUrlMatch(BaseMetric):
             if not self._is_valid_zillow_url(url):
                 logger.debug(f"Ignoring non-Zillow URL: {url}")
                 return
-            self._agent_url = url
-            logger.debug(f"Updated agent URL: {url}")
+            if url not in self._agent_urls:
+                self._agent_urls.append(url)
+                logger.debug(f"Tracked agent URL ({len(self._agent_urls)} total): {url}")
 
     @beartype
     async def compute(self) -> ZillowVerifierResult:
         """
-        Compute the verification result.
+        Compute the verification result using AND/OR matching logic.
+
+        AND level: Every GT group must be covered by at least one agent URL.
+        OR  level: Within each group, any alternative URL matching suffices.
 
         Returns:
-            ZillowVerifierResult with score 1.0 if URLs match, 0.0 otherwise.
+            ZillowVerifierResult with partial coverage score.
         """
-        if not self._agent_url:
-            logger.warning("No agent URL provided")
+        n_required = len(self.gt_urls)
+
+        if not self._agent_urls:
+            logger.warning("No agent URLs provided")
             return ZillowVerifierResult(
                 score=0.0,
                 match=False,
                 agent_url="",
                 ground_truth_url=self.ground_truth_url,
                 details={"error": "No agent URL provided"},
+                coverage=f"0/{n_required}",
             )
 
-        match, details = self._urls_match(self._agent_url, self.ground_truth_url)
+        n_covered = 0
+        group_details = []
+
+        # AND level: iterate over all required GT groups
+        for i, gt_group in enumerate(self.gt_urls):
+            group_covered = False
+            best_details = None
+
+            # OR level: any alternative URL in this group suffices
+            for j, gt_url in enumerate(gt_group):
+                # Check against all tracked agent URLs
+                for agent_url in self._agent_urls:
+                    match, details = self._urls_match(agent_url, gt_url)
+                    if match:
+                        group_covered = True
+                        best_details = {
+                            "group_index": i,
+                            "matched_alternative": j,
+                            "agent_url": agent_url,
+                            "gt_url": gt_url,
+                            "match": True,
+                            "details": details,
+                        }
+                        logger.info(
+                            f"Group {i} covered: agent URL matched alternative {j}\n"
+                            f"    agent_url: {agent_url}\n"
+                            f"    gt_url: {gt_url}"
+                        )
+                        break  # Found a match for this alternative
+                if group_covered:
+                    break  # This group is satisfied
+
+            if group_covered:
+                n_covered += 1
+            else:
+                # Store the last comparison details for debugging
+                if gt_group and self._agent_urls:
+                    _, last_details = self._urls_match(self._agent_urls[-1], gt_group[0])
+                    best_details = {
+                        "group_index": i,
+                        "matched_alternative": None,
+                        "agent_url": self._agent_urls[-1],
+                        "gt_url": gt_group[0],
+                        "match": False,
+                        "details": last_details,
+                    }
+
+            if best_details:
+                group_details.append(best_details)
+
+        score = n_covered / max(n_required, 1)
+        coverage_str = f"{n_covered}/{n_required}"
+
+        logger.info(f"Coverage: {coverage_str} (score={score:.2f})")
 
         return ZillowVerifierResult(
-            score=1.0 if match else 0.0,
-            match=match,
-            agent_url=self._agent_url,
+            score=score,
+            match=n_covered == n_required,
+            agent_url=self._agent_urls[-1] if self._agent_urls else "",
             ground_truth_url=self.ground_truth_url,
-            details=details,
+            details={
+                "coverage": coverage_str,
+                "n_covered": n_covered,
+                "n_required": n_required,
+                "agent_urls_count": len(self._agent_urls),
+                "groups": group_details,
+            },
+            coverage=coverage_str,
         )
 
     def _parse_zillow_url(self, url: str) -> dict:
@@ -1479,6 +1594,145 @@ def run_tests():
     test_results.append(passed5)
 
     # =========================================================================
+    # Category 21: AND/OR Multi-URL Matching (New)
+    # =========================================================================
+    print("\n[Category 21] AND/OR Multi-URL Matching")
+    print("-" * 50)
+
+    import asyncio
+
+    # 21a: Backward compat — single URL string as positional arg
+    v_compat = ZillowUrlMatch("https://www.zillow.com/homes/for_sale/")
+    passed = v_compat.gt_urls == [["https://www.zillow.com/homes/for_sale/"]]
+    print(f"  [{'PASS' if passed else 'FAIL'}] Backward compat: str positional -> [[str]]")
+    test_results.append(passed)
+
+    # 21b: Backward compat — ground_truth_url keyword arg
+    v_compat2 = ZillowUrlMatch(ground_truth_url="https://www.zillow.com/homes/for_sale/")
+    passed = v_compat2.gt_urls == [["https://www.zillow.com/homes/for_sale/"]]
+    print(f"  [{'PASS' if passed else 'FAIL'}] Backward compat: ground_truth_url kwarg")
+    test_results.append(passed)
+
+    # 21c: gt_urls list[list[str]] (AND/OR) format accepted
+    v_multi = ZillowUrlMatch(gt_urls=[
+        ['https://www.zillow.com/homes/for_sale/?searchQueryState={"filterState":{"price":{"min":500000}}}'],
+        ['https://www.zillow.com/homes/for_sale/?searchQueryState={"filterState":{"beds":{"min":3}}}'],
+    ])
+    passed = len(v_multi.gt_urls) == 2
+    print(f"  [{'PASS' if passed else 'FAIL'}] gt_urls: 2 AND groups parsed")
+    test_results.append(passed)
+
+    # 21d: Flat list backward compat: list[str] → [[str, str]]
+    v_flat = ZillowUrlMatch(gt_urls=[
+        "https://www.zillow.com/homes/for_sale/?url1",
+        "https://www.zillow.com/homes/for_sale/?url2",
+    ])
+    passed = len(v_flat.gt_urls) == 1 and len(v_flat.gt_urls[0]) == 2
+    print(f"  [{'PASS' if passed else 'FAIL'}] Flat list compat: [str,str] -> [[str,str]]")
+    test_results.append(passed)
+
+    # 21e: Full AND match (2/2 groups covered) → score 1.0
+    async def test_and_full_match():
+        gt_a = 'https://www.zillow.com/homes/for_sale/?searchQueryState={"filterState":{"price":{"min":500000}}}'
+        gt_b = 'https://www.zillow.com/homes/for_sale/?searchQueryState={"filterState":{"beds":{"min":3}}}'
+        v = ZillowUrlMatch(gt_urls=[[gt_a], [gt_b]])
+        await v.update(url=gt_a)
+        await v.update(url=gt_b)
+        r = await v.compute()
+        return r.score == 1.0 and r.match is True and r.coverage == "2/2"
+
+    passed = asyncio.run(test_and_full_match())
+    print(f"  [{'PASS' if passed else 'FAIL'}] AND logic: 2/2 groups covered -> score 1.0")
+    test_results.append(passed)
+
+    # 21f: Partial coverage (1/2 groups covered) → score 0.5
+    async def test_partial_coverage():
+        gt_a = 'https://www.zillow.com/homes/for_sale/?searchQueryState={"filterState":{"price":{"min":500000}}}'
+        gt_b = 'https://www.zillow.com/homes/for_sale/?searchQueryState={"filterState":{"beds":{"min":3}}}'
+        v = ZillowUrlMatch(gt_urls=[[gt_a], [gt_b]])
+        await v.update(url=gt_a)  # Only visit one URL
+        r = await v.compute()
+        return r.score == 0.5 and r.match is False and r.coverage == "1/2"
+
+    passed = asyncio.run(test_partial_coverage())
+    print(f"  [{'PASS' if passed else 'FAIL'}] Partial coverage: 1/2 -> score 0.5")
+    test_results.append(passed)
+
+    # 21g: OR alternatives — second alternative in group matches
+    async def test_or_alternatives():
+        gt_alt1 = 'https://www.zillow.com/homes/for_sale/?searchQueryState={"filterState":{"price":{"min":500000}}}'
+        gt_alt2 = 'https://www.zillow.com/homes/for_sale/?searchQueryState={"filterState":{"beds":{"min":3}}}'
+        v = ZillowUrlMatch(gt_urls=[[gt_alt1, gt_alt2]])  # One group, two OR alternatives
+        await v.update(url=gt_alt2)  # Visit the second alternative only
+        r = await v.compute()
+        return r.score == 1.0 and r.match is True and r.coverage == "1/1"
+
+    passed = asyncio.run(test_or_alternatives())
+    print(f"  [{'PASS' if passed else 'FAIL'}] OR logic: second alternative matches")
+    test_results.append(passed)
+
+    # 21h: No agent URLs → score 0.0
+    async def test_no_agent_urls():
+        gt = 'https://www.zillow.com/homes/for_sale/?searchQueryState={"filterState":{"price":{"min":500000}}}'
+        v = ZillowUrlMatch(gt_urls=[[gt]])
+        r = await v.compute()
+        return r.score == 0.0 and r.match is False and r.coverage == "0/1"
+
+    passed = asyncio.run(test_no_agent_urls())
+    print(f"  [{'PASS' if passed else 'FAIL'}] No agent URLs -> score 0.0")
+    test_results.append(passed)
+
+    # 21i: Reset clears all tracked URLs
+    async def test_reset():
+        gt = 'https://www.zillow.com/homes/for_sale/?searchQueryState={"filterState":{"price":{"min":500000}}}'
+        v = ZillowUrlMatch(gt_urls=[[gt]])
+        await v.update(url=gt)
+        r1 = await v.compute()
+        await v.reset()
+        r2 = await v.compute()
+        return r1.score == 1.0 and r2.score == 0.0
+
+    passed = asyncio.run(test_reset())
+    print(f"  [{'PASS' if passed else 'FAIL'}] Reset clears tracked URLs")
+    test_results.append(passed)
+
+    # 21j: Legacy single-URL compute still works (end-to-end)
+    async def test_legacy_compute():
+        gt = 'https://www.zillow.com/homes/for_sale/?searchQueryState={"filterState":{"price":{"min":500000}}}'
+        v = ZillowUrlMatch(ground_truth_url=gt)
+        await v.update(url=gt)
+        r = await v.compute()
+        return r.score == 1.0 and r.match is True and r.coverage == "1/1"
+
+    passed = asyncio.run(test_legacy_compute())
+    print(f"  [{'PASS' if passed else 'FAIL'}] Legacy single-URL end-to-end")
+    test_results.append(passed)
+
+    # 21k: generate_task_config backward compat
+    tc = generate_task_config(
+        url="https://www.zillow.com",
+        task="test",
+        location="Test, US",
+        timezone="America/Los_Angeles",
+        ground_truth_url="https://www.zillow.com/test/",
+    )
+    passed = tc.eval_config["ground_truth_url"] == "https://www.zillow.com/test/"
+    print(f"  [{'PASS' if passed else 'FAIL'}] generate_task_config: legacy ground_truth_url")
+    test_results.append(passed)
+
+    # 21l: generate_task_config with gt_urls
+    tc2 = generate_task_config(
+        url="https://www.zillow.com",
+        task="test",
+        location="Test, US",
+        timezone="America/Los_Angeles",
+        gt_urls=[["https://www.zillow.com/a/"], ["https://www.zillow.com/b/"]],
+    )
+    passed = tc2.eval_config["gt_urls"] == [["https://www.zillow.com/a/"], ["https://www.zillow.com/b/"]]
+    print(f"  [{'PASS' if passed else 'FAIL'}] generate_task_config: gt_urls format")
+    test_results.append(passed)
+
+    # =========================================================================
     # SUMMARY
     # =========================================================================
     print("\n" + "=" * 70)
@@ -1496,18 +1750,26 @@ def generate_task_config(
     task: str,
     location: str,
     timezone: str,
-    ground_truth_url: str,
+    gt_urls: list[list[str]] | None = None,
+    ground_truth_url: str | None = None,
 ) -> BaseTaskConfig:
     """Generate a BaseTaskConfig for a Zillow URL match task.
 
-    Follows the same pattern as craigslist_url_match.generate_task_config.
+    Supports both new ``gt_urls`` (AND/OR) and legacy ``ground_truth_url``
+    formats.  Follows the same pattern as craigslist_url_match.
     """
     tz_info = ZoneInfo(timezone)
     timestamp = int(datetime.now(tz_info).timestamp())
     user_metadata = UserMetadata(location=location, timezone=timezone, timestamp=timestamp)
 
     eval_target = get_import_path(ZillowUrlMatch)
-    eval_config = {"_target_": eval_target, "ground_truth_url": ground_truth_url}
+
+    if gt_urls is not None:
+        eval_config = {"_target_": eval_target, "gt_urls": gt_urls}
+    elif ground_truth_url is not None:
+        eval_config = {"_target_": eval_target, "ground_truth_url": ground_truth_url}
+    else:
+        raise ValueError("Must specify either 'gt_urls' or 'ground_truth_url'.")
 
     return BaseTaskConfig(url=url, task=task, user_metadata=user_metadata, eval_config=eval_config)
 
