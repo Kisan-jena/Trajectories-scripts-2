@@ -1247,8 +1247,19 @@ class SkyscannerInfoGathering(BaseMetric):
         
         # === Hotels ===
         if q_cities := query.get("cities"):
-            # Currently the JS might not extract city easily from the hotel results unless the search box has it
-            pass
+            # Check city from URL, page title, h1, or hotel location
+            searchable_fields = [
+                (info.get("url") or "").lower(),
+                (info.get("title") or "").lower(),
+                (info.get("h1") or "").lower(),
+                (info.get("ogTitle") or "").lower(),
+                (info.get("location") or "").lower(),
+                (info.get("city") or "").lower(),
+            ]
+            combined_text = " ".join(searchable_fields)
+            city_matched = any(c.lower() in combined_text for c in q_cities)
+            if not city_matched:
+                return False
             
         if "min_stars" in query and query["min_stars"] is not None:
             if info.get("stars", 0) < query["min_stars"]: return False
