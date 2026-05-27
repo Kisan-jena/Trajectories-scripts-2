@@ -22,10 +22,11 @@ Usage:
 """
 
 import asyncio
+import os
+import subprocess
 import sys
 from dataclasses import dataclass, field
 
-from playwright.async_api import async_playwright
 from loguru import logger
 
 from navi_bench.realtor.realtor_url_match import (
@@ -49,16 +50,13 @@ class BrowserConfig:
     viewport_height: int = 768
     user_agent: str = (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
     )
     locale: str = "en-US"
 
     # Anti-detection arguments
     launch_args: list = field(default_factory=lambda: [
         "--disable-blink-features=AutomationControlled",
-        "--disable-infobars",
-        "--start-maximized",
-        "--no-sandbox",
     ])
 
 
@@ -308,54 +306,25 @@ def _search_type_label(st: str) -> str:
 # BROWSER MANAGER
 # =============================================================================
 
-class BrowserManager:
-    """Manages browser lifecycle with stealth configuration."""
-
-    def __init__(self, config: BrowserConfig = None):
-        self.config = config or BrowserConfig()
-        self.browser = None
-        self.context = None
-        self.page = None
-
-    async def launch(self, playwright) -> tuple:
-        """Launch browser with stealth configuration."""
-        self.browser = await playwright.chromium.launch(
-            headless=self.config.headless,
-            args=self.config.launch_args,
+def get_chrome_url() -> str:
+    """Read the active tab URL from Chrome via AppleScript (macOS only)."""
+    script = (
+        'tell application "Google Chrome" '
+        'to get URL of active tab of first window'
+    )
+    try:
+        result = subprocess.run(
+            ["osascript", "-e", script],
+            capture_output=True, text=True, timeout=2,
         )
+        return result.stdout.strip()
+    except Exception:
+        return ""
 
-        self.context = await self.browser.new_context(
-            viewport={
-                "width": self.config.viewport_width,
-                "height": self.config.viewport_height,
-            },
-            user_agent=self.config.user_agent,
-            locale=self.config.locale,
-        )
 
-        # Anti-detection scripts
-        await self.context.add_init_script("""
-            Object.defineProperty(navigator, 'webdriver', {
-                get: () => undefined
-            });
-            window.chrome = { runtime: {} };
-            const originalQuery = window.navigator.permissions.query;
-            window.navigator.permissions.query = (parameters) => (
-                parameters.name === 'notifications' ?
-                    Promise.resolve({ state: Notification.permission }) :
-                    originalQuery(parameters)
-            );
-        """)
-
-        self.page = await self.context.new_page()
-        return self.browser, self.context, self.page
-
-    async def close(self) -> None:
-        """Close browser and cleanup."""
-        if self.context:
-            await self.context.close()
-        if self.browser:
-            await self.browser.close()
+def open_chrome(url: str) -> None:
+    """Open a URL in the user's normal Chrome (no automation attached)."""
+    subprocess.Popen(["open", "-a", "Google Chrome", url])
 
 
 # =============================================================================
@@ -523,66 +492,58 @@ class ResultReporter:
 # =============================================================================
 
 async def run_scenario(scenario: TaskScenario) -> dict:
-    """Run a single verification scenario."""
+    """Run a single verification scenario.
 
-    # Create evaluator with nested gt_urls structure: list[list[str]]
+    Uses AppleScript to read Chrome's URL instead of controlling Chrome via
+    Playwright/CDP, which realtor.com's Kasada anti-bot system detects.
+    Chrome runs completely normally with no automation attached.
+    """
     evaluator = RealtorUrlMatch(gt_urls=[[scenario.gt_url]])
     reporter = ResultReporter()
 
-    # Display task info
     reporter.print_header(scenario)
     reporter.print_instructions()
 
-    input("Press ENTER to launch browser...")
+    input("Press ENTER to open Chrome...")
 
-    async with async_playwright() as p:
-        # Launch browser
-        browser_mgr = BrowserManager()
-        browser, context, page = await browser_mgr.launch(p)
+    # Open the start URL in the user's normal Chrome (no automation)
+    open_chrome(scenario.start_url)
+    await asyncio.sleep(2)
 
-        # Initialize evaluator
-        await evaluator.reset()
+    await evaluator.reset()
 
-        # Navigate to start URL
-        logger.info(f"Opening {scenario.start_url}")
-        await page.goto(scenario.start_url, timeout=60000, wait_until="domcontentloaded")
+    print("\n  Browser ready -- you are now the agent!")
+    print("  Navigate Realtor.com and apply the required filters.")
+    print("  (URL is being tracked automatically every second)\n")
 
-        # Track initial URL
-        await evaluator.update(url=page.url)
+    # Poll Chrome's active tab URL via AppleScript in the background
+    stop_event = asyncio.Event()
+    last_displayed = ""
 
-        # Set up real-time URL tracking
-        async def on_navigation():
-            try:
-                current_url = page.url
-                await evaluator.update(url=current_url)
-                if "realtor.com" in current_url:
-                    display_url = current_url[:100] + "..." if len(current_url) > 100 else current_url
-                    print(f"  -> URL: {display_url}")
-            except Exception as e:
-                logger.debug(f"Navigation tracking error: {e}")
+    async def poll_url():
+        nonlocal last_displayed
+        while not stop_event.is_set():
+            url = await asyncio.to_thread(get_chrome_url)
+            if url:
+                await evaluator.update(url=url)
+                if "realtor.com" in url and url != last_displayed:
+                    display = url[:100] + "..." if len(url) > 100 else url
+                    print(f"  -> {display}")
+                    last_displayed = url
+            await asyncio.sleep(1)
 
-        page.on("framenavigated", lambda frame: asyncio.create_task(on_navigation()))
+    poll_task = asyncio.create_task(poll_url())
 
-        print("\n  Browser ready -- you are now the agent!")
-        print("  Navigate Realtor.com and apply the required filters.\n")
+    await asyncio.to_thread(input, "\nPress ENTER when you've completed the task... ")
 
-        # Wait for user completion
-        await asyncio.to_thread(
-            input,
-            "Press ENTER when you've completed the task... ",
-        )
+    stop_event.set()
+    poll_task.cancel()
 
-        # Get final URL
-        final_url = page.url
+    # Capture final URL
+    final_url = await asyncio.to_thread(get_chrome_url)
+    await evaluator.update(url=final_url)
+    result = await evaluator.compute()
 
-        # Final evaluation
-        await evaluator.update(url=final_url)
-        result = await evaluator.compute()
-
-        # Close browser
-        await browser_mgr.close()
-
-    # Display results
     reporter.print_result(result, evaluator, scenario, final_url)
 
     return {
