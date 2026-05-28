@@ -117,11 +117,33 @@
             return 'clear';
         },
         category: () => {
+            // 1. Check URL path (works for /discover/sports, /discover/comedy, etc.)
             if (url.includes('sports')) return 'sports';
             if (url.includes('concerts') || url.includes('music')) return 'concerts';
             if (url.includes('arts-theater') || url.includes('theater')) return 'theater';
             if (url.includes('comedy')) return 'comedy';
             if (url.includes('family')) return 'family';
+            // 2. Check URL query params (e.g., classificationName=Sports)
+            try {
+                const params = new URLSearchParams(window.location.search);
+                const cls = (params.get('classificationName') || params.get('classificationId') || '').toLowerCase();
+                if (cls.includes('sport')) return 'sports';
+                if (cls.includes('music') || cls.includes('concert')) return 'concerts';
+                if (cls.includes('theater') || cls.includes('theatre') || cls.includes('arts')) return 'theater';
+                if (cls.includes('comedy')) return 'comedy';
+                if (cls.includes('family')) return 'family';
+            } catch (e) {}
+            // 3. Check breadcrumbs or active tab text on the page
+            try {
+                const breadcrumb = document.querySelector('[class*="breadcrumb"], [class*="Breadcrumb"], nav[aria-label="breadcrumb"]');
+                const tabActive = document.querySelector('[class*="active"][class*="tab"], [aria-selected="true"]');
+                const hint = ((breadcrumb?.textContent || '') + ' ' + (tabActive?.textContent || '')).toLowerCase();
+                if (hint.includes('sport')) return 'sports';
+                if (hint.includes('concert') || hint.includes('music')) return 'concerts';
+                if (hint.includes('theater') || hint.includes('theatre')) return 'theater';
+                if (hint.includes('comedy')) return 'comedy';
+                if (hint.includes('family')) return 'family';
+            } catch (e) {}
             return null;
         },
         status: (t) => {
@@ -344,6 +366,7 @@
 
         eventCards: () => {
             const collected = [];
+            const pageCategory = Enrichment.category();
             // Target event cards on search/discover pages
             document.querySelectorAll('a[href*="/event/"], [data-testid="event-list-item"]').forEach(card => {
                 try {
@@ -352,31 +375,62 @@
                     
                     const href = card.tagName === 'A' ? card.getAttribute('href') : card.querySelector('a')?.getAttribute('href');
 
-                    let eventName = getText(card.querySelector('h3, [data-testid="event-title"]'));
+                    // --- EVENT NAME EXTRACTION ---
+                    // Try multiple selectors for event name (TM uses various class patterns)
+                    let eventName = getText(card.querySelector(
+                        'h3, h2, [data-testid="event-title"], [class*="EventName"], ' +
+                        '[class*="event-name"], [class*="eventName"], [class*="title"]'
+                    ));
                     if (!eventName && href) {
                          const match = href.match(/\/event\/([a-z0-9]+)/i);
-                         if (!match) return; // Skip if it's not a valid event link
-                         eventName = card.textContent.trim().split('\n')[0].trim().toLowerCase(); // Fallback to first line of text
+                         if (!match) return; // Skip if not a valid event link
+                         // Fallback: use first text line, stripping common prefixes
+                         eventName = card.textContent.trim().split('\n')[0].trim();
+                    }
+                    // Strip "Find Tickets" prefix that TM prepends to card text
+                    if (eventName) {
+                        eventName = eventName.replace(/^find\s*tickets\s*/i, '').trim();
                     }
 
-                    // Extract venue and city from event card text.
-                    // TM event cards commonly show: "VenueName · City, ST" or "VenueName - City, ST"
+                    // --- VENUE & CITY EXTRACTION ---
                     let venue = null;
                     let city = null;
-                    const venueEl = card.querySelector('[data-testid="event-venue"], [class*="venue"], [class*="Venue"]');
+                    const venueEl = card.querySelector(
+                        '[data-testid="event-venue"], [class*="venue"], [class*="Venue"], ' +
+                        '[class*="EventVenue"], [class*="event-venue"]'
+                    );
                     if (venueEl) {
                         venue = getText(venueEl);
                     }
-                    const locEl = card.querySelector('[data-testid="event-location"], [class*="location"], [class*="Location"]');
+                    const locEl = card.querySelector(
+                        '[data-testid="event-location"], [class*="location"], [class*="Location"], ' +
+                        '[class*="EventLocation"], [class*="event-location"]'
+                    );
                     if (locEl) {
                         city = getText(locEl);
                     }
-                    // Fallback: parse from the full card text using common separator patterns
+                    // Fallback: parse from full card text using multiple patterns
                     if (!venue || !city) {
-                        const locMatch = text.match(/([^·•\-\n]+?)\s*[·•\-]\s*([A-Za-z .'-]+),\s*([A-Z]{2})/);
+                        // Pattern 1: "VenueName · City, ST" or "VenueName - City, ST"
+                        let locMatch = text.match(/([^·•\-\n]+?)\s*[·•\-]\s*([A-Za-z .'-]+),\s*([A-Z]{2})/);
                         if (locMatch) {
                             if (!venue) venue = locMatch[1].trim();
                             if (!city) city = locMatch[2].trim().toLowerCase();
+                        }
+                        // Pattern 2: "City, ST VenueName" (TM concatenated format)
+                        // e.g. "Detroit, Mi The Fillmore Detroit6/3/26"
+                        if (!city) {
+                            locMatch = text.match(/,\s*([A-Za-z .'-]+),\s*([A-Z][a-z])\s+/);
+                            if (locMatch) {
+                                city = locMatch[1].trim().toLowerCase();
+                            }
+                        }
+                        // Pattern 3: Look for "City, ST" anywhere in the text
+                        if (!city) {
+                            locMatch = text.match(/([A-Z][a-z][A-Za-z .'-]+),\s*([A-Z]{2})(?:\s|$|\d)/);
+                            if (locMatch) {
+                                city = locMatch[1].trim().toLowerCase();
+                            }
                         }
                     }
 
@@ -385,6 +439,7 @@
                             source: "dom_event_card",
                             url: href || url,
                             eventName: eventName.toLowerCase(),
+                            eventCategory: pageCategory,
                             venue: venue,
                             city: city ? city.toLowerCase() : null,
                             date: Parsers.date(text),

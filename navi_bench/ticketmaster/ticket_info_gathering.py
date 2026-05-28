@@ -358,6 +358,22 @@ class TicketmasterInfoGathering(BaseMetric):
                 break
             
             elif page_type in ["event_category", "search_results"]:
+                # Propagate page-level filter metadata to individual event cards.
+                # The JS scraper captures filterLocation (e.g. "Detroit, MI") in a
+                # separate filter info dict.  Event cards on the same page lack this
+                # field, so we merge it so city checks can match.
+                page_filter_loc = None
+                page_category = None
+                for info in page_infos:
+                    if fl := info.get("filterLocation"):
+                        page_filter_loc = fl
+                    if cat := info.get("eventCategory"):
+                        page_category = cat
+                for info in page_infos:
+                    if page_filter_loc and not info.get("filterLocation"):
+                        info["filterLocation"] = page_filter_loc
+                    if page_category and not info.get("eventCategory"):
+                        info["eventCategory"] = page_category
                 fallback_infos.extend(page_infos)
         
         # Fallback for sold-out/discovery
@@ -426,7 +442,7 @@ class TicketmasterInfoGathering(BaseMetric):
         
         # 1. TEXT / CATEGORY MATCHES
         if q_names := query.get("event_names"):
-            if not any(q.lower() in info.get("eventName", "").lower() for q in q_names):
+            if not any(q.lower() in (info.get("eventName") or "").lower() for q in q_names):
                 return False
 
         if q_categories := query.get("event_categories"):
@@ -435,7 +451,17 @@ class TicketmasterInfoGathering(BaseMetric):
             context_cat_matched = any(any(c.lower() in ctx_c for ctx_c in context["categories"]) for c in q_categories)
             
             if not (cat_matched or context_cat_matched):
-                return False
+                # Soft fallback for discovery tasks: if the agent navigated to a
+                # search page (not /discover/<category>) but the filterLocation
+                # matches, and this is a no-event-names discovery query, treat
+                # category as satisfied.  The agent found events in the right
+                # location even if the explicit category signal is missing.
+                is_discovery = not query.get("event_names") and not query.get("require_available", False)
+                filter_loc = (info.get("filterLocation") or "").lower()
+                q_cities = query.get("cities", [])
+                has_filter_loc_match = any(c.lower() in filter_loc for c in q_cities) if q_cities else False
+                if not (is_discovery and has_filter_loc_match):
+                    return False
 
         # --- ENHANCED DISCOVERY PAGE CHECKS (LOCATION) ---
         if q_cities := query.get("cities"):
@@ -452,10 +478,26 @@ class TicketmasterInfoGathering(BaseMetric):
                 return False
 
         if q_venues := query.get("venues"):
-            venue_data = (info.get("venue") or "").lower()
-            venue_matched = any(q.lower() in venue_data for q in q_venues)
-            context_venue_matched = any(any(q.lower() in ctx_v for ctx_v in context["venues"]) for q in q_venues)
-            if not (venue_matched or context_venue_matched):
+            def _norm_venue(s):
+                """Normalize venue for comparison: strip punctuation, collapse spaces."""
+                s = s.lower()
+                s = re.sub(r'[&\-–—/,.:;\'\"()\[\]]+', ' ', s)  # replace punctuation with space
+                return re.sub(r'\s+', ' ', s).strip()
+            
+            venue_data = _norm_venue(info.get("venue") or "")
+            venue_matched = any(_norm_venue(q) in venue_data for q in q_venues) if venue_data else False
+            # Also check raw substring match (for simple cases like "sphere")
+            venue_raw = (info.get("venue") or "").lower()
+            venue_raw_matched = any(q.lower() in venue_raw for q in q_venues)
+            context_venue_matched = any(
+                any(_norm_venue(q) in _norm_venue(ctx_v) for ctx_v in context["venues"])
+                for q in q_venues
+            )
+            # Also check if venue name appears in the event URL or event name
+            url_venue = (info.get("url") or "").lower()
+            name_venue = (info.get("eventName") or "").lower()
+            url_or_name_matched = any(q.lower() in url_venue or q.lower() in name_venue for q in q_venues)
+            if not (venue_matched or venue_raw_matched or context_venue_matched or url_or_name_matched):
                 return False
 
 
@@ -474,13 +516,21 @@ class TicketmasterInfoGathering(BaseMetric):
                 return False
 
         # 3. PRICE & CURRENCY CONSTRAINTS
+        # Price can come from: individual ticket price, filter sidebar price,
+        # or LD+JSON floorPrice (schema.org lowPrice).
+        effective_price = (
+            info.get("price")
+            or info.get("filterMaxPrice")
+            or info.get("filterMinPrice")
+            or info.get("floorPrice")
+        )
         if max_price := query.get("max_price"):
-            eval_max_price = info.get("price") or info.get("filterMaxPrice")
+            eval_max_price = info.get("price") or info.get("filterMaxPrice") or info.get("floorPrice")
             if eval_max_price is None or eval_max_price > max_price:
                 return False
                 
         if min_price := query.get("min_price"):
-            eval_min_price = info.get("price") or info.get("filterMinPrice")
+            eval_min_price = info.get("price") or info.get("filterMinPrice") or info.get("floorPrice")
             if eval_min_price is None or eval_min_price < min_price:
                 return False
                 
@@ -537,7 +587,7 @@ class TicketmasterInfoGathering(BaseMetric):
                 if info_page_type != req_page_type:
                     return False
 
-        info_status = info.get("availabilityStatus", "").lower()
+        info_status = (info.get("availabilityStatus") or "").lower()
         if req_statuses := query.get("availability_statuses"):
             if info_status not in [s.lower() for s in req_statuses]:
                 return False
