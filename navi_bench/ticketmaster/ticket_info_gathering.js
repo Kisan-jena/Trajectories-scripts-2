@@ -385,6 +385,7 @@
                             source: "dom_event_card",
                             url: href || url,
                             eventName: eventName.toLowerCase(),
+                            eventCategory: Enrichment.category(),
                             venue: venue,
                             city: city ? city.toLowerCase() : null,
                             date: Parsers.date(text),
