@@ -69,8 +69,9 @@ class TaskScenario:
     location: str
     timezone: str
     category: str
+    values: dict | None = None
     tags: list = field(default_factory=list)
-    
+
     def __post_init__(self):
         """Validate scenario configuration."""
         assert self.task_id, "task_id is required"
@@ -82,6 +83,141 @@ class TaskScenario:
 # =============================================================================
 
 SCENARIOS: list[TaskScenario] = [
+    # =========================================================================
+    # NEW: Dynamic-date scenarios using {dateRange} placeholders
+    # =========================================================================
+
+    TaskScenario(
+        task_id="ticketmaster/concerts/charlie_puth/hollywood_fl_row_A_fridays_next_month",
+        name="Charlie Puth Row A Tickets - Hollywood FL",
+        description="Find available Row A tickets for the 'Charlie Puth: Whatever's Clever! World Tour' in Hollywood, Florida on Fridays next month.",
+        url="https://www.ticketmaster.com/",
+        task_prompt=(
+            "Find tickets for the 'Charlie Puth: Whatever's Clever! World Tour' "
+            "in Hollywood, FL on {dateRange}. Look for tickets specifically "
+            "located in Row A."
+        ),
+        queries=[[{
+            "event_names": ["charlie puth: whatever's clever! world tour"],
+            "cities": ["hollywood"],
+            "rows": ["A"],
+            "require_available": True,
+        }]],
+        values={"dateRange": "Fridays in next month"},
+        location="United States",
+        timezone="America/Chicago",
+        category="concerts",
+        tags=["concerts", "charlie puth", "hollywood", "florida", "row_filter", "date_filter", "availability"],
+    ),
+
+    TaskScenario(
+        task_id="ticketmaster/concerts/charlie_puth/row_A_fridays_next_month",
+        name="Charlie Puth Row A Tickets - Fridays Next Month",
+        description="Find available Row A tickets for the 'Charlie Puth: Whatever's Clever! World Tour' on Fridays next month.",
+        url="https://www.ticketmaster.com/",
+        task_prompt=(
+            "Find tickets for the 'Charlie Puth: Whatever's Clever! World Tour' "
+            "on {dateRange}. Look for tickets specifically located in Row A."
+        ),
+        queries=[[{
+            "event_names": ["charlie puth: whatever's clever! world tour"],
+            "rows": ["A"],
+            "require_available": True,
+        }]],
+        values={"dateRange": "Fridays in next month"},
+        location="United States",
+        timezone="America/Chicago",
+        category="concerts",
+        tags=["concerts", "charlie puth", "row_filter", "date_filter", "availability"],
+    ),
+
+    TaskScenario(
+        task_id="ticketmaster/sports/monster_jam/austin",
+        name="Monster Jam - Austin Saturdays",
+        description="Find Monster Jam tickets in Austin for Saturdays in next month.",
+        url="https://www.ticketmaster.com/",
+        task_prompt=(
+            "Find tickets for the Monster Jam event in Austin exactly on {dateRange}."
+        ),
+        queries=[[{
+            "event_names": ["monster jam"],
+            "cities": ["austin"],
+            "require_available": True,
+        }]],
+        values={"dateRange": "Saturdays in next month"},
+        location="United States",
+        timezone="America/New_York",
+        category="sports",
+        tags=["sports", "monster_jam", "austin", "dynamic_dates"],
+    ),
+
+    TaskScenario(
+        task_id="ticketmaster/sports/monster_jam_freestyle_mania/grand_rapids_saturdays",
+        name="Monster Jam Freestyle Mania - Grand Rapids",
+        description="Find Monster Jam Freestyle Mania tickets in Grand Rapids for Saturdays in next month.",
+        url="https://www.ticketmaster.com/",
+        task_prompt=(
+            "Search for 'Monster Jam Freestyle Mania' in Grand Rapids scheduled for {dateRange}."
+        ),
+        queries=[[{
+            "event_names": ["monster jam freestyle mania"],
+            "cities": ["grand rapids"],
+            "require_available": True,
+        }]],
+        values={"dateRange": "Saturdays in next month"},
+        location="United States",
+        timezone="America/Detroit",
+        category="sports",
+        tags=["sports", "monster_jam", "freestyle_mania", "grand_rapids", "dynamic_dates"],
+    ),
+
+    TaskScenario(
+        task_id="ticketmaster/concerts/backstreet_boys_sphere/fridays_next_month",
+        name="Backstreet Boys Sphere - Fridays Next Month",
+        description="Find Backstreet Boys: Into The Millennium concert tickets at Sphere in Las Vegas for Fridays in next month.",
+        url="https://www.ticketmaster.com/",
+        task_prompt=(
+            "Search for the 'Backstreet Boys: Into The Millennium' concert at the Sphere in Las Vegas. "
+            "Find tickets for {dateRange}. Look for the available options."
+        ),
+        queries=[[{
+            "event_names": ["backstreet boys: into the millennium"],
+            "cities": ["las vegas"],
+            "venues": ["sphere"],
+            "require_available": True,
+        }]],
+        values={"dateRange": "Fridays in next month"},
+        location="United States",
+        timezone="America/Los_Angeles",
+        category="concerts",
+        tags=["concerts", "backstreet_boys", "sphere", "las_vegas", "dynamic_dates"],
+    ),
+
+    TaskScenario(
+        task_id="ticketmaster/theater/hamilton/dynamic_saturdays_budget",
+        name="Hamilton (NY) - Saturdays Next Month Under $350",
+        description="Find Hamilton theater tickets for Saturdays in next month under $350.",
+        url="https://www.ticketmaster.com/",
+        task_prompt=(
+            "Search for Hamilton (NY) theater tickets priced under $350 for {dateRange}."
+        ),
+        queries=[[{
+            "event_names": ["hamilton"],
+            "event_categories": ["theater", "arts"],
+            "max_price": 350.0,
+            "require_available": True,
+        }]],
+        values={"dateRange": "Saturdays in next month"},
+        location="United States",
+        timezone="America/New_York",
+        category="theater",
+        tags=["theater", "hamilton", "dynamic_dates", "budget"],
+    ),
+
+    # =========================================================================
+    # EXISTING: Static-date scenarios
+    # =========================================================================
+
     # PRIMARY TASK: General Concert Check
     TaskScenario(
         task_id="ticketmaster/concerts/coldplay/001",
@@ -1584,7 +1720,7 @@ class ResultReporter:
     """Formats and displays verification results."""
     
     @staticmethod
-    def print_header(scenario: TaskScenario) -> None:
+    def print_header(scenario: TaskScenario, rendered_task: str) -> None:
         """Print task header."""
         print("\n" + "=" * 80)
         print(f"TICKETMASTER VERIFICATION: {scenario.name}")
@@ -1593,7 +1729,7 @@ class ResultReporter:
         print(f"Category:    {scenario.category}")
         print(f"Location:    {scenario.location}")
         print("-" * 80)
-        print(f"TASK: {scenario.task_prompt}")
+        print(f"TASK: {rendered_task}")
         print("-" * 80)
         print(f"Looking for: {scenario.queries[0][0]}")
         print("=" * 80)
@@ -1686,49 +1822,65 @@ class ResultReporter:
 
 async def run_scenario(scenario: TaskScenario) -> dict:
     """Run a single verification scenario."""
-    
-    evaluator = TicketmasterInfoGathering(queries=scenario.queries)
+
+    # Use generate_task_config_deterministic to resolve {dateRange} placeholders
+    # and inject resolved ISO dates into queries.
+    task_config = generate_task_config_deterministic(
+        mode="any",
+        task=scenario.task_prompt,
+        queries=scenario.queries,
+        location=scenario.location,
+        timezone=scenario.timezone,
+        url=scenario.url,
+        values=scenario.values,
+    )
+
+    eval_config = task_config.eval_config
+
+    evaluator = TicketmasterInfoGathering(
+        queries=eval_config["queries"]
+    )
     reporter = ResultReporter()
-    
-    reporter.print_header(scenario)
+    rendered_task = task_config.task
+    reporter.print_header(scenario, rendered_task)
     reporter.print_instructions()
-    
+
     input("Press ENTER to launch browser...")
-    
+
     async with async_playwright() as p:
         browser_mgr = BrowserManager()
         browser, context, page = await browser_mgr.launch(p)
-        
+
         await evaluator.reset()
         evaluator.attach_to_context(context)
-        
+
         logger.info(f"Opening {scenario.url}")
         # Ticketmaster load times can be rough, handle timeouts gracefully
         try:
             await page.goto(scenario.url, timeout=60000, wait_until="domcontentloaded")
         except Exception as e:
             logger.warning(f"Initial navigation timeout/error (normal for TM): {e}")
-            
+
         await evaluator.update(page=page)
-        
-        print("\n🌐 Browser ready - you are now the agent!")
+
+        print("\n\U0001f310 Browser ready - you are now the agent!")
         print("Navigate through Ticketmaster to complete the task.\n")
-        
+
         await asyncio.to_thread(
-            input, 
+            input,
             "Press ENTER when you've completed the task... "
         )
-        
+
         try:
             await evaluator.update(page=page)
         except Exception as e:
             logger.warning(f"Final update failed: {e}")
-        
+
         result = await evaluator.compute()
         await browser_mgr.close()
-    
+
     reporter.print_result(result, evaluator, scenario)
-    
+
     return {
         "task_id": scenario.task_id,
         "score": result.score,
