@@ -181,7 +181,7 @@ class MomondoInfoGathering(BaseMetric):
                 print("-" * 50)
                 print(">> ACTIVE GLOBALS FILTERS DETECTED:")
                 if max_p := first_info.get('filterMaxPrice'):
-                    print(f"   Max Price Slider: ₹{max_p}")
+                    print(f"   Max Price Slider: ${max_p}")
                 if airlines := first_info.get('filterAirlines'):
                     print(f"   Airlines Checked: {', '.join(airlines)}")
                 if stops := first_info.get('filterStops'):
@@ -196,18 +196,18 @@ class MomondoInfoGathering(BaseMetric):
                     stops = "Direct" if item.get("stops") == 0 else f"{item.get('stops')} Stops"
                     depart = item.get("departTime", "XX:XX")
                     arrive = item.get("arrivalTime", "XX:XX")
-                    print(f"  {i}. {depart}-{arrive} | {airline} | {stops} | ₹{price}", flush=True)
+                    print(f"  {i}. {depart}-{arrive} | {airline} | {stops} | ${price}", flush=True)
                     
                 elif ptype == "hotel_results":
                     name = item.get("title", "Unknown")
                     score = item.get("score", "N/A")
                     stars = item.get("stars", 0)
-                    print(f"  {i}. {name} | {stars}★ | Rating: {score} | ₹{price}", flush=True)
+                    print(f"  {i}. {name} | {stars}★ | Rating: {score} | ${price}", flush=True)
                     
                 elif ptype == "car_results":
                     name = item.get("title", "Unknown")
                     provider = item.get("provider", "Unknown")
-                    print(f"  {i}. {name} | {provider} | ₹{price}", flush=True)
+                    print(f"  {i}. {name} | {provider} | ${price}", flush=True)
 
         page_type = infos[0].get("pageType", "unknown") if infos else "unknown"
         anti_bot = infos[0].get("antiBotStatus", "unknown") if infos else "unknown"
@@ -385,7 +385,7 @@ def generate_task_config_deterministic(
     location: str,
     timezone: str,
     timestamp: int | None = None,
-    url: str = "https://www.momondo.in/", 
+    url: str = "https://www.momondo.com/", 
     values: dict[str, str] | None = None,
 ) -> BaseTaskConfig:
     user_metadata = initialize_user_metadata(timezone, location, timestamp)

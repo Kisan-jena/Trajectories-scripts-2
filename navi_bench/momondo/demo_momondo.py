@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from playwright.async_api import async_playwright
 from loguru import logger
 
-# Import the new Momondo evaluator
+# Import the Momondo evaluator
 from momondo_info_gathering import MomondoInfoGathering
 
 @dataclass
@@ -14,7 +14,7 @@ class BrowserConfig:
     viewport_width: int = 1366
     viewport_height: int = 768
     user_agent: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    locale: str = "en-IN"
+    locale: str = "en-US"
     launch_args: list = field(default_factory=lambda: [
         "--disable-blink-features=AutomationControlled",
         "--disable-infobars",
@@ -30,37 +30,37 @@ class TaskScenario:
     url: str
     task_prompt: str
     queries: list
-    location: str = "India"
-    timezone: str = "Asia/Kolkata"
+    location: str = "United States"
+    timezone: str = "America/New_York"
 
-# Updated Scenarios for Momondo
+# Demo Scenarios for US Market (momondo.com)
 SCENARIOS: list[TaskScenario] = [
     TaskScenario(
-        task_id="momondo/flights/del_bom_budget",
-        name="Delhi to Mumbai - Under ₹5000",
-        description="Search for a budget flight between DEL and BOM.",
+        task_id="momondo/flights/jfk_lax_budget",
+        name="New York to Los Angeles — Under $400",
+        description="Search for a budget flight between JFK and LAX.",
         url="https://www.momondo.com/",
         task_prompt=(
-            "Find a flight from New Delhi (DEL) to Mumbai (BOM). The ticket must cost less than ₹5000."
+            "Find a flight from New York (JFK) to Los Angeles (LAX). The ticket must cost less than $400."
         ),
         queries=[[{
-            "origins": ["del"], 
-            "destinations": ["bom"],
-            "max_price": 5000.0,
+            "origins": ["jfk"], 
+            "destinations": ["lax"],
+            "max_price": 400.0,
         }]]
     ),
     TaskScenario(
-        task_id="momondo/flights/blr_del_direct_indigo",
-        name="Bangalore to Delhi - Direct IndiGo",
-        description="Search specifically for a direct IndiGo flight.",
+        task_id="momondo/flights/ord_mia_direct_united",
+        name="Chicago to Miami — Direct United Airlines",
+        description="Search specifically for a direct United Airlines flight.",
         url="https://www.momondo.com/",
         task_prompt=(
-            "Search for a direct IndiGo flight from Bangalore (BLR) to New Delhi (DEL)."
+            "Search for a direct United Airlines flight from Chicago (ORD) to Miami (MIA)."
         ),
         queries=[[{
-            "origins": ["blr"], 
-            "destinations": ["del"],
-            "airlines": ["indigo"],
+            "origins": ["ord"], 
+            "destinations": ["mia"],
+            "airlines": ["united"],
             "require_direct": True,
         }]]
     )
@@ -91,7 +91,7 @@ async def run_scenario(scenario: TaskScenario) -> dict:
     
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=False)
-        context = await browser.new_context(locale="en-IN", timezone_id=scenario.timezone)
+        context = await browser.new_context(locale="en-US", timezone_id=scenario.timezone)
         
         # Critical for Momondo/Kayak evasion
         await context.add_init_script("""

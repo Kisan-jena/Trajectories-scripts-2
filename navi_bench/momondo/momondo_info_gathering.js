@@ -12,16 +12,22 @@
     const Parsers = {
         price: (text) => {
             if (!text) return null;
-            let match = text.match(/([$€£₹]|rs\.?|inr)?\s*([\d,]+(?:\.\d+)?)/i);
+            // Match common currency symbols followed by a number
+            let match = text.match(/([$€£₹]|rs\.?|inr|usd)?\s*([\d,]+(?:\.\d+)?)/i);
             if (match && match[2]) {
                 let amount = parseFloat(match[2].replace(/,/g, ""));
                 let symbol = (match[1] || "").toLowerCase();
                 
-                if (symbol === '$') amount *= 83.0; 
-                else if (symbol === '€') amount *= 90.0; 
-                else if (symbol === '£') amount *= 105.0; 
+                // USD is the base currency — no conversion needed for $
+                // Convert other currencies TO USD if they appear
+                if (symbol === '€') amount *= 1.08;        // EUR → USD
+                else if (symbol === '£') amount *= 1.27;   // GBP → USD
+                else if (symbol === '₹' || symbol === 'rs' || symbol === 'rs.' || symbol === 'inr') {
+                    amount /= 83.0;                         // INR → USD
+                }
+                // $ and 'usd' pass through as-is (already in USD)
                 
-                return amount;
+                return Math.round(amount * 100) / 100; // round to 2 decimal places
             }
             return null;
         },
