@@ -6,7 +6,6 @@ by gathering event information through JavaScript scraping and matching against 
 
 import functools
 import itertools
-import random
 import re
 import asyncio
 from datetime import datetime, timedelta
@@ -310,6 +309,32 @@ class TicketmasterInfoGathering(BaseMetric):
         event_listing_found = False
         fallback_infos: list[InfoDict] = []
         
+        # Collect context from all pages to inherit missing metadata on event pages.
+        # We key by both the individual info URL and the page_visit base_url so that
+        # DOM ticket listings (which often lack their own url field) can still inherit
+        # context from the page they were scraped on.
+        event_contexts: dict[str, dict[str, set]] = {}
+        
+        def _add_to_context(key: str, info: dict) -> None:
+            if key not in event_contexts:
+                event_contexts[key] = {"cities": set(), "venues": set(), "categories": set()}
+            ctx = event_contexts[key]
+            if c := info.get("city"): ctx["cities"].add(c.lower())
+            if c := info.get("filterLocation"): ctx["cities"].add(c.lower())
+            if v := info.get("venue"): ctx["venues"].add(v.lower())
+            if cat := info.get("eventCategory"): ctx["categories"].add(cat.lower())
+        
+        for page_visit in self._navigation_stack:
+            page_base = page_visit["base_url"]
+            for info in page_visit["infos"]:
+                info_url = (info.get("url") or "").split("?")[0]
+                # Add context keyed by the info's own URL
+                if "/event/" in info_url:
+                    _add_to_context(info_url, info)
+                # Also add context keyed by the page's base URL (for DOM tickets with no url)
+                if "/event/" in page_base:
+                    _add_to_context(page_base, info)
+
         # Walk backwards
         for page_visit in reversed(self._navigation_stack):
             page_type = page_visit["page_type"]
@@ -322,11 +347,12 @@ class TicketmasterInfoGathering(BaseMetric):
                 
             if page_type == "event_listing" and not event_listing_found:
                 event_listing_found = True
+                page_base = page_visit["base_url"]
                 for i, alternative_conditions in enumerate(self.queries):
                     if self._is_query_covered[i]:
                         continue
                     for info in page_infos:
-                        if self._check_alternative_conditions(i, alternative_conditions, info):
+                        if self._check_alternative_conditions(i, alternative_conditions, info, event_contexts, page_base):
                             self._is_query_covered[i] = True
                             break
                 break
@@ -340,13 +366,23 @@ class TicketmasterInfoGathering(BaseMetric):
                 if self._is_query_covered[i]:
                     continue
                 for info in fallback_infos:
-                    if self._check_alternative_conditions(i, alternative_conditions, info):
+                    if self._check_alternative_conditions(i, alternative_conditions, info, event_contexts):
                         self._is_query_covered[i] = True
                         break
         
-        # Handle exhaustion
+        # Handle exhaustion: if ALL alternatives for a query are sold out, the agent
+        # navigated correctly but couldn't buy tickets — credit the agent.
+        # IMPORTANT: Only apply exhaustion when require_available is NOT True.
+        # If any alternative explicitly requires availability, exhaustion should not
+        # override the failure — the agent was expected to find available tickets.
         for i, alternative_conditions in enumerate(self.queries):
             if self._is_query_covered[i]:
+                continue
+            # Skip exhaustion if ANY alternative demands available tickets
+            any_requires_available = any(
+                alt.get("require_available", False) for alt in alternative_conditions
+            )
+            if any_requires_available:
                 continue
             for j, alternative_condition in enumerate(alternative_conditions):
                 if not self._is_exhausted(alternative_condition, self._unavailable_evidences[i][j]):
@@ -365,19 +401,28 @@ class TicketmasterInfoGathering(BaseMetric):
         )
 
     def _check_alternative_conditions(
-        self, i: int, alternative_conditions: list[MultiCandidateQuery], info: InfoDict
+        self, i: int, alternative_conditions: list[MultiCandidateQuery], info: InfoDict,
+        event_contexts: dict, page_base_url: str | None = None
     ) -> bool:
         for j, alternative_condition in enumerate(alternative_conditions):
             evidences = self._unavailable_evidences[i][j]
-            if self._check_multi_candidate_query(alternative_condition, info, evidences):
+            if self._check_multi_candidate_query(alternative_condition, info, evidences, event_contexts, page_base_url):
                 return True
         return False
 
     @classmethod
     def _check_multi_candidate_query(
-        cls, query: MultiCandidateQuery, info: InfoDict, evidences: list[InfoDict]
+        cls, query: MultiCandidateQuery, info: InfoDict, evidences: list[InfoDict],
+        event_contexts: dict, page_base_url: str | None = None
     ) -> bool:
         """Check TM-specific query constraints against the scraped InfoDict."""
+        
+        info_url = (info.get("url") or "").split("?")[0]
+        _empty_ctx = {"cities": set(), "venues": set(), "categories": set()}
+        # Look up context by the info's own URL first, then fall back to the page-level URL
+        context = event_contexts.get(info_url, _empty_ctx)
+        if context is _empty_ctx and page_base_url:
+            context = event_contexts.get(page_base_url, _empty_ctx)
         
         # 1. TEXT / CATEGORY MATCHES
         if q_names := query.get("event_names"):
@@ -386,10 +431,13 @@ class TicketmasterInfoGathering(BaseMetric):
 
         if q_categories := query.get("event_categories"):
             cat = (info.get("eventCategory") or "").lower()
-            if not cat or not any(c.lower() in cat for c in q_categories):
+            cat_matched = any(c.lower() in cat for c in q_categories) if cat else False
+            context_cat_matched = any(any(c.lower() in ctx_c for ctx_c in context["categories"]) for c in q_categories)
+            
+            if not (cat_matched or context_cat_matched):
                 return False
 
-        # --- NEW: ENHANCED DISCOVERY PAGE CHECKS (LOCATION) ---
+        # --- ENHANCED DISCOVERY PAGE CHECKS (LOCATION) ---
         if q_cities := query.get("cities"):
             # Check parsed city from event card OR the typed UI location filter
             city_data = (info.get("city") or "").lower()
@@ -398,12 +446,16 @@ class TicketmasterInfoGathering(BaseMetric):
             
             city_matched = any(c.lower() in city_data or c.lower() in url_data for c in q_cities)
             filter_loc_matched = any(c.lower() in filter_loc for c in q_cities)
+            context_city_matched = any(any(c.lower() in ctx_c for ctx_c in context["cities"]) for c in q_cities)
             
-            if not (city_matched or filter_loc_matched):
+            if not (city_matched or filter_loc_matched or context_city_matched):
                 return False
 
         if q_venues := query.get("venues"):
-            if not any(q.lower() in (info.get("venue") or "").lower() for q in q_venues):
+            venue_data = (info.get("venue") or "").lower()
+            venue_matched = any(q.lower() in venue_data for q in q_venues)
+            context_venue_matched = any(any(q.lower() in ctx_v for ctx_v in context["venues"]) for q in q_venues)
+            if not (venue_matched or context_venue_matched):
                 return False
 
 

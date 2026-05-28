@@ -243,6 +243,7 @@
                                 floorPrice: item.offers?.lowPrice ? parseFloat(item.offers.lowPrice) : null,
                                 price: null, // FIX: Schema floor price is not a specific ticket price
                                 currency: item.offers?.priceCurrency || "USD",
+                                isResale: false, // LD+JSON schema doesn't distinguish resale vs primary
                                 availabilityStatus: item.offers?.availability?.includes("InStock") ? "available" : "sold_out",
                                 url: item.url || url
                             });
@@ -355,7 +356,28 @@
                     if (!eventName && href) {
                          const match = href.match(/\/event\/([a-z0-9]+)/i);
                          if (!match) return; // Skip if it's not a valid event link
-                         eventName = card.textContent.trim().split('\n')[0].trim().toLowerCase();; // Fallback to first line of text
+                         eventName = card.textContent.trim().split('\n')[0].trim().toLowerCase(); // Fallback to first line of text
+                    }
+
+                    // Extract venue and city from event card text.
+                    // TM event cards commonly show: "VenueName · City, ST" or "VenueName - City, ST"
+                    let venue = null;
+                    let city = null;
+                    const venueEl = card.querySelector('[data-testid="event-venue"], [class*="venue"], [class*="Venue"]');
+                    if (venueEl) {
+                        venue = getText(venueEl);
+                    }
+                    const locEl = card.querySelector('[data-testid="event-location"], [class*="location"], [class*="Location"]');
+                    if (locEl) {
+                        city = getText(locEl);
+                    }
+                    // Fallback: parse from the full card text using common separator patterns
+                    if (!venue || !city) {
+                        const locMatch = text.match(/([^·•\-\n]+?)\s*[·•\-]\s*([A-Za-z .'-]+),\s*([A-Z]{2})/);
+                        if (locMatch) {
+                            if (!venue) venue = locMatch[1].trim();
+                            if (!city) city = locMatch[2].trim().toLowerCase();
+                        }
                     }
 
                     if (eventName) {
@@ -363,6 +385,8 @@
                             source: "dom_event_card",
                             url: href || url,
                             eventName: eventName.toLowerCase(),
+                            venue: venue,
+                            city: city ? city.toLowerCase() : null,
                             date: Parsers.date(text),
                             availabilityStatus: text.toLowerCase().includes('canceled') ? 'cancelled' : 'available',
                             info: text

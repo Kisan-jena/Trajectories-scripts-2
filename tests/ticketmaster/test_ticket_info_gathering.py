@@ -164,14 +164,14 @@ class TestCheckMultiCandidateQuery:
         query = MultiCandidateQuery(event_names=["lakers", "celtics"])
         info = InfoDict(eventName="Los Angeles Lakers vs Warriors")
         evidences = []
-        result = TicketmasterInfoGathering._check_multi_candidate_query(query, info, evidences)
+        result = TicketmasterInfoGathering._check_multi_candidate_query(query, info, evidences, {})
         assert result is True
 
     def test_cities_match_standard(self):
         """Test standard cities matching."""
         query = MultiCandidateQuery(cities=["los angeles"])
         info = InfoDict(city="Los Angeles")
-        result = TicketmasterInfoGathering._check_multi_candidate_query(query, info, [])
+        result = TicketmasterInfoGathering._check_multi_candidate_query(query, info, [], {})
         assert result is True
 
     def test_cities_match_filter_location_fallback(self):
@@ -179,7 +179,7 @@ class TestCheckMultiCandidateQuery:
         query = MultiCandidateQuery(cities=["chicago"])
         # Standard city is missing, but agent typed it in UI
         info = InfoDict(city=None, filterLocation="Chicago, IL")
-        result = TicketmasterInfoGathering._check_multi_candidate_query(query, info, [])
+        result = TicketmasterInfoGathering._check_multi_candidate_query(query, info, [], {})
         assert result is True
 
     def test_exclude_resale_filter_success(self):
@@ -187,7 +187,7 @@ class TestCheckMultiCandidateQuery:
         query = MultiCandidateQuery(exclude_resale=True)
         # standard ticket, no resale flag
         info = InfoDict(isResale=False, filterTicketTypes=["standard"])
-        result = TicketmasterInfoGathering._check_multi_candidate_query(query, info, [])
+        result = TicketmasterInfoGathering._check_multi_candidate_query(query, info, [], {})
         assert result is True
 
     def test_exclude_resale_filter_fail(self):
@@ -195,7 +195,7 @@ class TestCheckMultiCandidateQuery:
         query = MultiCandidateQuery(exclude_resale=True)
         # Ticket is resale
         info = InfoDict(isResale=True)
-        result = TicketmasterInfoGathering._check_multi_candidate_query(query, info, [])
+        result = TicketmasterInfoGathering._check_multi_candidate_query(query, info, [], {})
         assert result is False
 
     def test_require_resale_filter(self):
@@ -203,7 +203,7 @@ class TestCheckMultiCandidateQuery:
         query = MultiCandidateQuery(require_resale=True)
         # Global filter array says resale is checked
         info = InfoDict(isResale=False, filterTicketTypes=["resale"])
-        result = TicketmasterInfoGathering._check_multi_candidate_query(query, info, [])
+        result = TicketmasterInfoGathering._check_multi_candidate_query(query, info, [], {})
         assert result is True
 
     def test_date_match_filter_date_range_fallback(self):
@@ -211,7 +211,7 @@ class TestCheckMultiCandidateQuery:
         query = MultiCandidateQuery(dates=["2026-03-25"])
         # We are on the discovery page, no exact event date parsed, but UI filter is set
         info = InfoDict(date=None, filterDateRange="Mar 20 - Apr 15, 2026", availabilityStatus="available")
-        result = TicketmasterInfoGathering._check_multi_candidate_query(query, info, [])
+        result = TicketmasterInfoGathering._check_multi_candidate_query(query, info, [], {})
         assert result is True
 
     def test_price_range_filters(self):
@@ -222,7 +222,7 @@ class TestCheckMultiCandidateQuery:
             ticket_quantities=[2, 4]
         )
         info = InfoDict(price=150.0, ticketCount=2)
-        result = TicketmasterInfoGathering._check_multi_candidate_query(query, info, [])
+        result = TicketmasterInfoGathering._check_multi_candidate_query(query, info, [], {})
         assert result is True
 
     def test_row_and_section_filters(self):
@@ -232,7 +232,7 @@ class TestCheckMultiCandidateQuery:
             rows=["a", "b"]
         )
         info = InfoDict(section="Orchestra Center", row="B")
-        result = TicketmasterInfoGathering._check_multi_candidate_query(query, info, [])
+        result = TicketmasterInfoGathering._check_multi_candidate_query(query, info, [], {})
         assert result is True
 
     def test_unavailable_require_available_true(self):
@@ -240,7 +240,7 @@ class TestCheckMultiCandidateQuery:
         query = MultiCandidateQuery(require_available=True)
         info = InfoDict(availabilityStatus="sold_out")
         evidences = []
-        result = TicketmasterInfoGathering._check_multi_candidate_query(query, info, evidences)
+        result = TicketmasterInfoGathering._check_multi_candidate_query(query, info, evidences, {})
         
         assert result is False
         assert len(evidences) == 1
@@ -394,3 +394,178 @@ class TestTaskConfigGeneration:
                 }
             ]
         ]
+
+
+# =============================================================================
+# Exhaustion + require_available Fix Tests
+# =============================================================================
+
+class TestExhaustionRequireAvailable:
+    """Test that exhaustion does NOT override require_available=True."""
+
+    @pytest.mark.asyncio
+    async def test_sold_out_with_require_available_true_rejects(self):
+        """CRITICAL: sold_out + require_available=True must score 0, not 1."""
+        queries = [[{"event_names": ["coldplay"], "require_available": True}]]
+        metric = TicketmasterInfoGathering(queries=queries)
+        metric._navigation_stack = [
+            {"base_url": "https://tm.com/event/444", "page_type": "event_listing",
+             "anti_bot": "clear", "infos": [
+                {"url": "https://tm.com/event/444", "eventName": "Coldplay",
+                 "availabilityStatus": "sold_out"}
+            ]}
+        ]
+        result = await metric.compute()
+        assert result.score == 0.0
+        assert result.is_query_covered == [False]
+
+    @pytest.mark.asyncio
+    async def test_sold_out_with_require_available_false_passes(self):
+        """sold_out + require_available=False should pass (exhaustion works)."""
+        queries = [[{"event_names": ["coldplay"], "require_available": False}]]
+        metric = TicketmasterInfoGathering(queries=queries)
+        metric._navigation_stack = [
+            {"base_url": "https://tm.com/event/555", "page_type": "event_listing",
+             "anti_bot": "clear", "infos": [
+                {"url": "https://tm.com/event/555", "eventName": "Coldplay",
+                 "availabilityStatus": "sold_out"}
+            ]}
+        ]
+        result = await metric.compute()
+        assert result.score == 1.0
+        assert result.is_query_covered == [True]
+
+    @pytest.mark.asyncio
+    async def test_available_event_passes_normally(self):
+        """Available event + require_available=True should score 1."""
+        queries = [[{"event_names": ["coldplay"], "require_available": True}]]
+        metric = TicketmasterInfoGathering(queries=queries)
+        metric._navigation_stack = [
+            {"base_url": "https://tm.com/event/666", "page_type": "event_listing",
+             "anti_bot": "clear", "infos": [
+                {"url": "https://tm.com/event/666", "price": 100,
+                 "eventName": "Coldplay", "availabilityStatus": "available"}
+            ]}
+        ]
+        result = await metric.compute()
+        assert result.score == 1.0
+
+
+# =============================================================================
+# Context Inheritance Tests
+# =============================================================================
+
+class TestContextInheritance:
+    """Test city/venue context inheritance from search pages to event pages."""
+
+    @pytest.mark.asyncio
+    async def test_city_inherited_from_search_page(self):
+        """City from search page should be inherited on the event page."""
+        queries = [
+            [{"event_names": ["hamilton"], "cities": ["new york"], "require_available": True}],
+            [{"event_names": ["hamilton"], "require_available": True}]
+        ]
+        metric = TicketmasterInfoGathering(queries=queries)
+        metric._navigation_stack = [
+            {"base_url": "https://tm.com/search", "page_type": "search_results",
+             "anti_bot": "clear", "infos": [
+                {"url": "https://tm.com/event/123", "city": "new york",
+                 "eventName": "Hamilton", "availabilityStatus": "available"}
+            ]},
+            {"base_url": "https://tm.com/event/123", "page_type": "event_listing",
+             "anti_bot": "clear", "infos": [
+                {"url": "https://tm.com/event/123", "price": 150,
+                 "eventName": "Hamilton", "availabilityStatus": "available"}
+            ]}
+        ]
+        result = await metric.compute()
+        assert result.is_query_covered == [True, True]
+
+    @pytest.mark.asyncio
+    async def test_wrong_city_rejected(self):
+        """Wrong city should not match even with context inheritance."""
+        queries = [[{"event_names": ["hamilton"], "cities": ["chicago"], "require_available": True}]]
+        metric = TicketmasterInfoGathering(queries=queries)
+        metric._navigation_stack = [
+            {"base_url": "https://tm.com/search", "page_type": "search_results",
+             "anti_bot": "clear", "infos": [
+                {"url": "https://tm.com/event/789", "city": "new york",
+                 "eventName": "Hamilton", "availabilityStatus": "available"}
+            ]},
+            {"base_url": "https://tm.com/event/789", "page_type": "event_listing",
+             "anti_bot": "clear", "infos": [
+                {"url": "https://tm.com/event/789", "price": 150,
+                 "eventName": "Hamilton", "availabilityStatus": "available"}
+            ]}
+        ]
+        result = await metric.compute()
+        assert result.is_query_covered == [False]
+
+    @pytest.mark.asyncio
+    async def test_context_via_page_base_url(self):
+        """DOM tickets with no url should inherit context from page base_url."""
+        queries = [[{"event_names": ["coldplay"], "cities": ["denver"], "require_available": True}]]
+        metric = TicketmasterInfoGathering(queries=queries)
+        metric._navigation_stack = [
+            {"base_url": "https://tm.com/search", "page_type": "search_results",
+             "anti_bot": "clear", "infos": [
+                {"url": "https://tm.com/event/AAA", "city": "denver",
+                 "eventName": "Coldplay", "availabilityStatus": "available"}
+            ]},
+            {"base_url": "https://tm.com/event/AAA", "page_type": "event_listing",
+             "anti_bot": "clear", "infos": [
+                {"eventName": "Coldplay", "price": 100, "availabilityStatus": "available"}
+                # No url field — context should come from page base_url
+            ]}
+        ]
+        result = await metric.compute()
+        assert result.is_query_covered == [True]
+
+    @pytest.mark.asyncio
+    async def test_venue_inherited_from_search_page(self):
+        """Venue from search page should be inherited on the event page."""
+        queries = [[{"event_names": ["lion king"], "venues": ["aronoff center"],
+                     "require_available": True}]]
+        metric = TicketmasterInfoGathering(queries=queries)
+        metric._navigation_stack = [
+            {"base_url": "https://tm.com/search", "page_type": "search_results",
+             "anti_bot": "clear", "infos": [
+                {"url": "https://tm.com/event/456",
+                 "venue": "Aronoff Center-Procter & Gamble Hall",
+                 "eventName": "The Lion King Touring", "availabilityStatus": "available"}
+            ]},
+            {"base_url": "https://tm.com/event/456", "page_type": "event_listing",
+             "anti_bot": "clear", "infos": [
+                {"url": "https://tm.com/event/456", "price": 80,
+                 "eventName": "The Lion King Touring", "availabilityStatus": "available"}
+            ]}
+        ]
+        result = await metric.compute()
+        assert result.is_query_covered == [True]
+
+
+# =============================================================================
+# Multiple Alternatives (OR Logic) Tests
+# =============================================================================
+
+class TestMultipleAlternatives:
+    """Test that OR logic works across alternatives."""
+
+    @pytest.mark.asyncio
+    async def test_second_alternative_matches(self):
+        """Second alternative (different city) should match."""
+        queries = [[
+            {"event_names": ["hamilton"], "cities": ["new york"], "require_available": True},
+            {"event_names": ["hamilton"], "cities": ["chicago"], "require_available": True}
+        ]]
+        metric = TicketmasterInfoGathering(queries=queries)
+        metric._navigation_stack = [
+            {"base_url": "https://tm.com/event/999", "page_type": "event_listing",
+             "anti_bot": "clear", "infos": [
+                {"url": "https://tm.com/event/999", "price": 100,
+                 "eventName": "Hamilton", "city": "chicago",
+                 "availabilityStatus": "available"}
+            ]}
+        ]
+        result = await metric.compute()
+        assert result.is_query_covered == [True]
