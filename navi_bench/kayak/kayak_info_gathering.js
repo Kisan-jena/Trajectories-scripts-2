@@ -36,8 +36,9 @@
                 const match = url.match(/\/flights\/([A-Za-z]{3})-([A-Za-z]{3})\/(\d{4}-\d{2}-\d{2})/i);
                 if (match) meta = { origin: match[1], destination: match[2], departDate: match[3] };
             } else if (url.includes('/cars/')) {
-                const match = url.match(/\/cars\/([^\/]+)\/([^\/]+)\/(\d{4}-\d{2}-\d{2})/i);
-                if (match) meta = { pickUpLocation: match[1], dropOffLocation: match[2], pickUpDate: match[3] };
+                // Fix: URL format is /cars/LOCATION/PICKUP_DATE/DROPOFF_DATE
+                const match = url.match(/\/cars\/([^\/]+)\/(\d{4}-\d{2}-\d{2})\/(\d{4}-\d{2}-\d{2})/i);
+                if (match) meta = { pickUpLocation: match[1], pickUpDate: match[2], dropOffDate: match[3] };
             } else if (url.includes('/hotels/')) {
                 const match = url.match(/\/hotels\/([^\/]+)\/(\d{4}-\d{2}-\d{2})\/(\d{4}-\d{2}-\d{2})/i);
                 if (match) meta = { city: match[1], checkIn: match[2], checkOut: match[3] };
@@ -47,27 +48,27 @@
 
         filters: () => {
             const f = { filterAirlines: [], filterStops: [], filterMaxPrice: null };
-            if (!url.includes('/flights/')) return f; 
-            
+            if (!url.includes('/flights/')) return f;
+
             try {
                 const airNodes = document.querySelectorAll('div[role="region"][aria-label="Airlines"] input[type="checkbox"]:checked:not([disabled])');
                 airNodes.forEach(n => {
                     const lbl = n.closest('.hYzH-filter-checkbox-outer')?.querySelector('.hYzH-checkbox-label');
                     if (lbl) f.filterAirlines.push(getText(lbl));
                 });
-                
+
                 const stopNodes = document.querySelectorAll('div[role="region"][aria-label="Stops"] input[type="checkbox"]:checked:not([disabled])');
                 stopNodes.forEach(n => {
                     const lbl = n.closest('.hYzH-filter-checkbox-outer')?.querySelector('.hYzH-checkbox-label');
                     if (lbl) f.filterStops.push(getText(lbl));
                 });
-                
+
                 // Max Price Slider (Removed conversion logic)
                 const priceNode = document.querySelector('div[role="region"][aria-label="Price"] span[role="slider"]');
                 if (priceNode && priceNode.getAttribute('aria-valuenow')) {
                     f.filterMaxPrice = parseFloat(priceNode.getAttribute('aria-valuenow'));
                 }
-            } catch(e) { console.error("Filter parse error", e); }
+            } catch (e) { console.error("Filter parse error", e); }
             return f;
         },
 
@@ -79,7 +80,7 @@
             rows.forEach(row => {
                 try {
                     const rowText = getText(row);
-                    
+
                     // 1. Extract Price (Prioritize the dedicated price class)
                     const priceNode = row.querySelector('.e2GB-price-text') || row.querySelector('[class*="price-text"]');
                     const extractedPrice = Parsers.price(getText(priceNode) || rowText);
@@ -102,6 +103,24 @@
                         }
                     }
 
+                    // 4. Extract Cabin Class (NEW)
+                    let cabinClass = null;
+
+                    // Try common UI locations first
+                    const cabinNode =
+                        row.querySelector('[class*="cabin"]') ||
+                        row.querySelector('[aria-label*="cabin"]') ||
+                        row.querySelector('[data-testid*="cabin"]') ||
+                        row.querySelector('[class*="class"]');
+
+                    // fallback: scan row text
+                    if (cabinNode) {
+                        cabinClass = getText(cabinNode);
+                    } else {
+                        const m = rowText.match(/(premium economy|business class|first class|economy|business|first)/i);
+                        if (m) cabinClass = m[1];
+                    }
+
                     const stops = Parsers.stops(rowText);
 
                     const formattedStops = stops === 0 ? "Direct" : (stops === null ? null : `${stops} Stops`);
@@ -113,7 +132,11 @@
                             price: extractedPrice,
                             stops: formattedStops,
                             departTime,
-                            arrivalTime
+                            arrivalTime,
+                            cabinClass:
+                                (
+                                    cabinClass || ""
+                                ).toLowerCase()
                         });
                     }
                 } catch (e) { console.error("Flight row error", e); }
@@ -155,7 +178,7 @@
                             passengers, bags, doors, transmission
                         });
                     }
-                } catch (e) {}
+                } catch (e) { }
             });
             return collected;
         },
@@ -205,7 +228,7 @@
                             location: location
                         });
                     }
-                } catch (e) {}
+                } catch (e) { }
             });
             return collected;
         }
