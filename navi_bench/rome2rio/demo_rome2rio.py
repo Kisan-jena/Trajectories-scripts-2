@@ -45,7 +45,7 @@ SCENARIOS = [
 
 class ResultReporter:
     @staticmethod
-    def print_result(result):
+    def print_result(result, evaluator=None, queries=None):
         print("\n" + "=" * 80)
         print("VERIFICATION RESULT")
         print("=" * 80)
@@ -57,6 +57,40 @@ class ResultReporter:
         print(f"Score:            {score_pct:.1f}%")
         print(f"Queries Matched:  {result.n_covered}/{result.n_queries}")
         print("-" * 80)
+
+        # Show all scraped routes and why they matched / didn't
+        if evaluator and evaluator._infos:
+            print("\nSCRAPED ROUTES:")
+            for i, info in enumerate(evaluator._infos, 1):
+                mode     = info.get("mode") or info.get("name") or "?"
+                price    = f"₹{info.get('min_price')}" if info.get("min_price") is not None else "N/A"
+                duration = f"{info.get('duration')} min" if info.get("duration") is not None else "N/A"
+
+                # Check which queries this route satisfies
+                matched_qs = []
+                if queries:
+                    for qi, qgroup in enumerate(queries):
+                        for q in qgroup:
+                            if evaluator._match(q, info):
+                                matched_qs.append(qi + 1)
+                                break
+
+                match_tag = f"✓ matches query {matched_qs}" if matched_qs else "✗ no match"
+                print(f"  {i}. {mode} | {price} | {duration}  [{match_tag}]")
+
+            # If nothing matched, show what the query required
+            if result.n_covered == 0 and queries:
+                print("\nWHY DID IT FAIL? Query requirements:")
+                for qi, qgroup in enumerate(queries, 1):
+                    for q in qgroup:
+                        reqs = []
+                        if "max_duration" in q: reqs.append(f"duration ≤ {q['max_duration']} min")
+                        if "min_duration" in q: reqs.append(f"duration ≥ {q['min_duration']} min")
+                        if "max_price"    in q: reqs.append(f"price ≤ ₹{q['max_price']}")
+                        if "min_price"   in q: reqs.append(f"price ≥ ₹{q['min_price']}")
+                        if "modes"       in q: reqs.append(f"mode in {q['modes']}")
+                        print(f"  Query {qi}: {', '.join(reqs) or 'no constraints'}")
+        print("=" * 80)
 
 
 # ---------------- CORE ----------------
@@ -105,42 +139,41 @@ async def run_scenario(scenario):
         )
 
         # ---------------- CONTINUOUS SCRAPING ----------------
-        print("\n[SYSTEM] Starting continuous monitor. Press Ctrl+C to stop.")
-        
-        try:
-            while True:
-                # Dynamically grab the last opened tab
-                active_page = context.pages[-1]
+        print("\n[SYSTEM] Scraping live. Press ENTER at any time to stop and see the result.\n")
 
-                # Check for all possible card layouts across the site
-                count_results = await active_page.locator('[data-testid^="trip-search-result"]').count()
-                count_schedules = await active_page.locator('[aria-labelledby^="schedule-cell-times-"]').count()
-                count_hotels = await active_page.locator('[data-testid="hotel-list-item"]').count()
-                count_experiences = await active_page.locator('article').count()
-                
-                # Trigger evaluation if any are present
-                if count_results > 0 or count_schedules > 0 or count_hotels > 0 or count_experiences > 0:
-                    await evaluator.update(page=active_page)
-                    result = await evaluator.compute()
+        stop_event = asyncio.Event()
 
-                    if result.score >= 1.0:
-                        print("\n✅ Target queries covered!")
-                        reporter.print_result(result)
-                        break
-                
-                # Wait a few seconds before checking the DOM again
+        async def scrape_loop():
+            while not stop_event.is_set():
+                try:
+                    active_page = context.pages[-1]
+                    count_results     = await active_page.locator('[data-testid^="trip-search-result"]').count()
+                    count_schedules   = await active_page.locator('[aria-labelledby^="schedule-cell-times-"]').count()
+                    count_hotels      = await active_page.locator('[data-testid="hotel-list-item"]').count()
+                    count_experiences = await active_page.locator('article').count()
+
+                    if count_results > 0 or count_schedules > 0 or count_hotels > 0 or count_experiences > 0:
+                        await evaluator.update(page=active_page)
+                        result = await evaluator.compute()
+                        if result.score >= 1.0:
+                            print("\n✅ All target queries covered!")
+                            stop_event.set()
+                            return
+                except Exception as e:
+                    print(f"[ERROR] {e}")
                 await asyncio.sleep(3)
 
-        except KeyboardInterrupt:
-            print("\n[SYSTEM] Continuous scraping stopped manually.")
-        except Exception as e:
-            print(f"[ERROR] Scraping loop interrupted: {e}")
+        async def wait_for_enter():
+            await asyncio.to_thread(input, "")
+            stop_event.set()
 
-        # If the loop breaks without hitting 100%, print the final state
-        if 'result' in locals() and result.score < 1.0:
-            reporter.print_result(result)
+        await asyncio.gather(scrape_loop(), wait_for_enter())
 
-    return result
+        # Always print final result
+        final_result = await evaluator.compute()
+        reporter.print_result(final_result, evaluator, scenario.queries)
+
+    return final_result
 
 
 # ---------------- MAIN ----------------
