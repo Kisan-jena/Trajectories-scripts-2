@@ -518,12 +518,6 @@ class TicketmasterInfoGathering(BaseMetric):
         # 3. PRICE & CURRENCY CONSTRAINTS
         # Price can come from: individual ticket price, filter sidebar price,
         # or LD+JSON floorPrice (schema.org lowPrice).
-        effective_price = (
-            info.get("price")
-            or info.get("filterMaxPrice")
-            or info.get("filterMinPrice")
-            or info.get("floorPrice")
-        )
         if max_price := query.get("max_price"):
             eval_max_price = info.get("price") or info.get("filterMaxPrice") or info.get("floorPrice")
             if eval_max_price is None or eval_max_price > max_price:
