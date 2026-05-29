@@ -164,14 +164,14 @@ class TestCheckMultiCandidateQuery:
         query = MultiCandidateQuery(event_names=["lakers", "celtics"])
         info = InfoDict(eventName="Los Angeles Lakers vs Warriors")
         evidences = []
-        result = TicketmasterInfoGathering._check_multi_candidate_query(query, info, evidences, {})
+        result = TicketmasterInfoGathering._check_multi_candidate_query(query, info, evidences)
         assert result is True
 
     def test_cities_match_standard(self):
         """Test standard cities matching."""
         query = MultiCandidateQuery(cities=["los angeles"])
         info = InfoDict(city="Los Angeles")
-        result = TicketmasterInfoGathering._check_multi_candidate_query(query, info, [], {})
+        result = TicketmasterInfoGathering._check_multi_candidate_query(query, info, [])
         assert result is True
 
     def test_cities_match_filter_location_fallback(self):
@@ -179,7 +179,7 @@ class TestCheckMultiCandidateQuery:
         query = MultiCandidateQuery(cities=["chicago"])
         # Standard city is missing, but agent typed it in UI
         info = InfoDict(city=None, filterLocation="Chicago, IL")
-        result = TicketmasterInfoGathering._check_multi_candidate_query(query, info, [], {})
+        result = TicketmasterInfoGathering._check_multi_candidate_query(query, info, [])
         assert result is True
 
     def test_exclude_resale_filter_success(self):
@@ -187,7 +187,7 @@ class TestCheckMultiCandidateQuery:
         query = MultiCandidateQuery(exclude_resale=True)
         # standard ticket, no resale flag
         info = InfoDict(isResale=False, filterTicketTypes=["standard"])
-        result = TicketmasterInfoGathering._check_multi_candidate_query(query, info, [], {})
+        result = TicketmasterInfoGathering._check_multi_candidate_query(query, info, [])
         assert result is True
 
     def test_exclude_resale_filter_fail(self):
@@ -195,7 +195,7 @@ class TestCheckMultiCandidateQuery:
         query = MultiCandidateQuery(exclude_resale=True)
         # Ticket is resale
         info = InfoDict(isResale=True)
-        result = TicketmasterInfoGathering._check_multi_candidate_query(query, info, [], {})
+        result = TicketmasterInfoGathering._check_multi_candidate_query(query, info, [])
         assert result is False
 
     def test_require_resale_filter(self):
@@ -203,7 +203,7 @@ class TestCheckMultiCandidateQuery:
         query = MultiCandidateQuery(require_resale=True)
         # Global filter array says resale is checked
         info = InfoDict(isResale=False, filterTicketTypes=["resale"])
-        result = TicketmasterInfoGathering._check_multi_candidate_query(query, info, [], {})
+        result = TicketmasterInfoGathering._check_multi_candidate_query(query, info, [])
         assert result is True
 
     def test_date_match_filter_date_range_fallback(self):
@@ -211,7 +211,7 @@ class TestCheckMultiCandidateQuery:
         query = MultiCandidateQuery(dates=["2026-03-25"])
         # We are on the discovery page, no exact event date parsed, but UI filter is set
         info = InfoDict(date=None, filterDateRange="Mar 20 - Apr 15, 2026", availabilityStatus="available")
-        result = TicketmasterInfoGathering._check_multi_candidate_query(query, info, [], {})
+        result = TicketmasterInfoGathering._check_multi_candidate_query(query, info, [])
         assert result is True
 
     def test_price_range_filters(self):
@@ -222,7 +222,7 @@ class TestCheckMultiCandidateQuery:
             ticket_quantities=[2, 4]
         )
         info = InfoDict(price=150.0, ticketCount=2)
-        result = TicketmasterInfoGathering._check_multi_candidate_query(query, info, [], {})
+        result = TicketmasterInfoGathering._check_multi_candidate_query(query, info, [])
         assert result is True
 
     def test_row_and_section_filters(self):
@@ -232,7 +232,7 @@ class TestCheckMultiCandidateQuery:
             rows=["a", "b"]
         )
         info = InfoDict(section="Orchestra Center", row="B")
-        result = TicketmasterInfoGathering._check_multi_candidate_query(query, info, [], {})
+        result = TicketmasterInfoGathering._check_multi_candidate_query(query, info, [])
         assert result is True
 
     def test_unavailable_require_available_true(self):
@@ -240,7 +240,7 @@ class TestCheckMultiCandidateQuery:
         query = MultiCandidateQuery(require_available=True)
         info = InfoDict(availabilityStatus="sold_out")
         evidences = []
-        result = TicketmasterInfoGathering._check_multi_candidate_query(query, info, evidences, {})
+        result = TicketmasterInfoGathering._check_multi_candidate_query(query, info, evidences)
         
         assert result is False
         assert len(evidences) == 1
