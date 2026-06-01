@@ -37,6 +37,8 @@ class Info(TypedDict, total=False):
     score: float
     rating: float
     location_score: float
+    origin: str
+    destination: str
 
 
 class FinalResult(BaseModel):
@@ -305,25 +307,40 @@ class Rome2RioInfoGathering(BaseMetric):
                     return False
 
         # Check destinations in the route mode string
-        # NOTE: Only check for schedules/hotels/experiences, NOT for routes or trip_details
-        # (routes/trip_details pages have origin/destination implicit in the URL, not in individual cards)
-        if "destinations" in query and page_type not in ("results", "trip_details"):
-            mode = (info.get("mode") or "").lower()
+        # NOTE: Routes/trip_details have origin/destination implicit in the URL.
+        if "destinations" in query:
             destinations = query["destinations"]
-            match = any(dest.lower() in mode for dest in destinations)
-            if not match:
-                print(f"  [QUERY FAIL] Destination mismatch: looking for {destinations} in mode: {repr(mode)}")
-                return False
+            if page_type == "schedule":
+                route_dest = (info.get("destination") or "").lower()
+                if route_dest and not any(dest.lower() in route_dest for dest in destinations):
+                    print(
+                        f"  [QUERY FAIL] Destination mismatch: looking for {destinations} in schedule destination: {repr(route_dest)}"
+                    )
+                    return False
+            elif page_type not in ("results", "trip_details"):
+                mode = (info.get("mode") or "").lower()
+                match = any(dest.lower() in mode for dest in destinations)
+                if not match:
+                    print(f"  [QUERY FAIL] Destination mismatch: looking for {destinations} in mode: {repr(mode)}")
+                    return False
 
         # Check origins in the route mode string
-        # NOTE: Only check for schedules/hotels/experiences, NOT for routes or trip_details
-        if "origins" in query and page_type not in ("results", "trip_details"):
-            mode = (info.get("mode") or "").lower()
+        # NOTE: Routes/trip_details have origin/destination implicit in the URL.
+        if "origins" in query:
             origins = query["origins"]
-            match = any(orig.lower() in mode for orig in origins)
-            if not match:
-                print(f"  [QUERY FAIL] Origin mismatch: looking for {origins} in mode: {repr(mode)}")
-                return False
+            if page_type == "schedule":
+                route_origin = (info.get("origin") or "").lower()
+                if route_origin and not any(orig.lower() in route_origin for orig in origins):
+                    print(
+                        f"  [QUERY FAIL] Origin mismatch: looking for {origins} in schedule origin: {repr(route_origin)}"
+                    )
+                    return False
+            elif page_type not in ("results", "trip_details"):
+                mode = (info.get("mode") or "").lower()
+                match = any(orig.lower() in mode for orig in origins)
+                if not match:
+                    print(f"  [QUERY FAIL] Origin mismatch: looking for {origins} in mode: {repr(mode)}")
+                    return False
 
         if "max_price" in query:
             currency = info.get("currency")
