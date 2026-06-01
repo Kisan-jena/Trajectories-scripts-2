@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+4#!/usr/bin/env python
 import asyncio
 import sys
 from dataclasses import dataclass
@@ -7,50 +7,189 @@ from loguru import logger
 
 from navi_bench.rome2rio.rome2rio_info_gathering import Rome2RioInfoGathering
 
-
 # ---------------- CONFIG ----------------
+
 
 @dataclass
 class TaskScenario:
+    """Configuration for a single Rome2Rio demo task."""
+
     task_id: str
     name: str
-    description: str
     url: str
     task_prompt: str
     queries: list
+    mode: str = "any"
     timezone: str = "Asia/Kolkata"
 
 
 SCENARIOS = [
+    # TaskScenario(
+    #     task_id="fast",
+    #     name="Rome to Florence - Under 2h",
+    #     description="",
+    #     url="https://www.rome2rio.com/",
+    #     task_prompt="Find transport options from Rome to Florence under 2 hours.",
+    #     queries=[[{"max_duration": 120}]]
+    # ),
+    # TaskScenario(
+    #     task_id="cheap",
+    #     name="Cheapest route under ₹3000",
+    #     description="",
+    #     url="https://www.rome2rio.com/",
+    #     task_prompt="Find the cheapest route under ₹3000.",
+    #     queries=[[{"max_price": 3000}]]
+    # ),
+    #     TaskScenario(
+    #     task_id="del_nyc_flight_duration_bracket",
+    #     name="New Delhi to New York - Flight (18-32h)",
+    #     description="",
+    #     url="https://www.rome2rio.com/",
+    #     task_prompt="I'm looking for flight routes from New Delhi to New York. Tell me info about the top listing where the travel time is strictly between 18 hours (1080 mins) and 32 hours (1920 mins).",
+    #     queries=[[{"origins": ["new delhi"], "destinations": ["new york"], "min_duration": 1080, "max_duration": 1920}]]
+    # )
     TaskScenario(
-        task_id="fast",
-        name="Rome to Florence - Under 2h",
-        description="",
+        task_id="del_london_stansted_under_18h",
+        name="New Delhi to London Stansted - Under 18 Hours",
         url="https://www.rome2rio.com/",
-        task_prompt="Find transport options from Rome to Florence under 2 hours.",
-        queries=[[{"max_duration": 120}]]
+        task_prompt=(
+            "Find routes from New Delhi to London arriving at "
+            "London Stansted Airport where the total travel "
+            "time is under 18 hours (1080 mins)."
+        ),
+        queries=[
+            [
+                {
+                    "origins": ["new delhi"],
+                    "destinations": ["london"],
+                    "modes": ["london stansted airport"],
+                    "max_duration": 1080,
+                }
+            ]
+        ],
+    ),
+    # 6
+    TaskScenario(
+        task_id="par_budget_5star",
+        name="Paris 5-Star Hotel Under USD 1000",
+        url="https://www.rome2rio.com/",
+        task_prompt=("Find a 5-star hotel in Paris for next weekend " "that costs less than USD 1000 per night."),
+        queries=[
+            [
+                {
+                    "cities": ["paris"],
+                    "min_stars": 5,
+                    "max_price": 00.0,
+                }
+            ]
+        ],
+        mode="any",
+        timezone="Europe/Paris",
     ),
     TaskScenario(
-        task_id="cheap",
-        name="Cheapest route under ₹3000",
-        description="",
+        task_id="ams_market_centre_budget",
+        name="Amsterdam Market/Centre Hotel Under USD 200",
         url="https://www.rome2rio.com/",
-        task_prompt="Find the cheapest route under ₹3000.",
-        queries=[[{"max_price": 3000}]]
+        task_prompt=(
+            "Find a 3- or 4-star hotel in Amsterdam for next Sunday "
+            "with 'Market' or 'Centre' in the name, a review score of at least 8.0, "
+            "and costing less than USD 600 per night."
+        ),
+        queries=[
+            [
+                {
+                    "cities": ["amsterdam"],
+                    "min_stars": 3,
+                    "max_stars": 4,
+                    "modes": ["market", "centre"],
+                    "min_score": 8.0,
+                    "max_price": 600.0,
+                }
+            ]
+        ],
+        mode="any",
+        timezone="Europe/Amsterdam",
     ),
-        TaskScenario(
-        task_id="del_nyc_train_duration_bracket",
-        name="New Delhi to New York - Train segment (23-24h)",
-        description="",
+    TaskScenario(
+        task_id="hin_fra_indigo_emirates_exact",
+        name="Hindon to Frankfurt - IndiGo + Emirates",
         url="https://www.rome2rio.com/",
-        task_prompt="I'm looking for routes from New Delhi to New York that involve a train segment. Tell me info about the top listing where the travel time is strictly between 23 hours (1380 mins) and 24 hours (1440 mins).",
-        queries=[[{"origins": ["new delhi"], "destinations": ["new york"], "modes": ["train"], "min_duration": 1380, "max_duration": 1440}]]
-    )
-    
+        task_prompt=(
+            "Tell me info about the top listing for a flight schedule from Hindon "
+            "to Frankfurt that combines IndiGo Airlines and Emirates. I need the "
+            "duration to be exactly 33.5 hours (2010 minutes) and the price to be "
+            "strictly between USD 500 and USD 1000."
+        ),
+        queries=[
+            [
+                {
+                    "origins": ["hindon"],
+                    "destinations": ["frankfurt"],
+                    "modes": ["indigo airlines", "emirates"],
+                    "min_duration": 2010,
+                    "max_duration": 2010,
+                    "min_price": 500.0,
+                    "max_price": 2000.0,
+                }
+            ]
+        ],
+        mode="all",
+        timezone="Asia/Kolkata",
+    ),
+    TaskScenario(
+        task_id="ams_keukenhof_shuttle",
+        name="Amsterdam Keukenhof Shuttle",
+        url="https://www.rome2rio.com/",
+        task_prompt=(
+            "Find the Keukenhof Shuttle Bus experience from Amsterdam Schiphol "
+            "Airport. It must have a rating of at least 4.6, a duration of exactly "
+            "240 minutes, and a price strictly capped at USD 700."
+        ),
+        queries=[
+            [
+                {
+                    "cities": ["amsterdam"],
+                    "modes": ["keukenhof", "shuttle"],
+                    "min_rating": 4.6,
+                    "min_duration": 240,
+                    "max_duration": 240,
+                    "max_price": 700.0,
+                }
+            ]
+        ],
+        mode="all",
+        timezone="Europe/Amsterdam",
+    ),
+    TaskScenario(
+        task_id="berlin_hemingway_boutiquestyle_tour",
+        name="Berlin Hemingway Boutiquestyle Tour",
+        url="https://www.rome2rio.com/",
+        task_prompt=(
+            "Find any 'Hemingway' or 'Boutiquestyle' tours in Berlin for "
+            "upcoming Monday. The tour must last exactly 60 minutes, "
+            "have a rating above 4.5, and cost strictly under USD 300. "
+            "Summarize the top matching option."
+        ),
+        queries=[
+            [
+                {
+                    "cities": ["berlin"],
+                    "modes": ["hemingway", "boutiquestyle"],
+                    "min_duration": 60,
+                    "max_duration": 60,
+                    "min_rating": 4.5,
+                    "max_price": 300.0,
+                }
+            ]
+        ],
+        mode="any",
+        timezone="Europe/Berlin",
+    ),
 ]
 
 
 # ---------------- RESULT REPORT ----------------
+
 
 class ResultReporter:
     @staticmethod
@@ -71,8 +210,8 @@ class ResultReporter:
         if evaluator and evaluator._infos:
             print("\nSCRAPED ROUTES:")
             for i, info in enumerate(evaluator._infos, 1):
-                mode     = info.get("mode") or info.get("name") or "?"
-                price    = f"{info.get('min_price')}" if info.get("min_price") is not None else "N/A"
+                mode = info.get("mode") or info.get("name") or "?"
+                price = f"{info.get('min_price')}" if info.get("min_price") is not None else "N/A"
                 duration = f"{info.get('duration')} min" if info.get("duration") is not None else "N/A"
 
                 # Check which queries this route satisfies
@@ -85,7 +224,17 @@ class ResultReporter:
                                 break
 
                 match_tag = f"✓ matches query {matched_qs}" if matched_qs else "✗ no match"
-                print(f"  {i}. {mode} | {price} | {duration}  [{match_tag}]")
+                line = f"  {i}. {mode} | {price} | {duration}  [{match_tag}]"
+
+                # If no match, show concise reasons for the first query group
+                if not matched_qs and queries:
+                    # Use the first query in the first group as representative
+                    representative_q = queries[0][0]
+                    reasons = evaluator.why_not_match(representative_q, info)
+                    if reasons:
+                        line += f" -- reasons: {', '.join(reasons)}"
+
+                print(line)
 
             # If nothing matched, show what the query required
             if result.n_covered == 0 and queries:
@@ -93,41 +242,68 @@ class ResultReporter:
                 for qi, qgroup in enumerate(queries, 1):
                     for q in qgroup:
                         reqs = []
-                        if "max_duration" in q: reqs.append(f"duration ≤ {q['max_duration']} min")
-                        if "min_duration" in q: reqs.append(f"duration ≥ {q['min_duration']} min")
-                        if "max_price"    in q: reqs.append(f"price ≤ {q['max_price']}")
-                        if "min_price"   in q: reqs.append(f"price ≥ {q['min_price']}")
-                        if "modes"       in q: reqs.append(f"mode in {q['modes']}")
+                        if "max_duration" in q:
+                            reqs.append(f"duration ≤ {q['max_duration']} min")
+                        if "min_duration" in q:
+                            reqs.append(f"duration ≥ {q['min_duration']} min")
+                        if "max_price" in q:
+                            reqs.append(f"price ≤ {q['max_price']}")
+                        if "min_price" in q:
+                            reqs.append(f"price ≥ {q['min_price']}")
+                        if "modes" in q:
+                            reqs.append(f"mode in {q['modes']}")
+                        if "cities" in q:
+                            reqs.append(f"cities in {q['cities']}")
+                        if "min_stars" in q:
+                            reqs.append(f"min_stars ≥ {q['min_stars']}")
+                        if "max_stars" in q:
+                            reqs.append(f"max_stars ≤ {q['max_stars']}")
+                        if "min_score" in q:
+                            reqs.append(f"min_score ≥ {q['min_score']}")
                         print(f"  Query {qi}: {', '.join(reqs) or 'no constraints'}")
         print("=" * 80)
 
 
 # ---------------- CORE ----------------
 
+
 async def run_scenario(scenario):
-    evaluator = Rome2RioInfoGathering(scenario.queries)
+    logger.info(f"[DEMO] Starting scenario: {scenario.name}")
+    logger.info(f"[DEMO] Task ID: {scenario.task_id}")
+    logger.info(f"[DEMO] Mode: {scenario.mode}")
+    logger.info(f"[DEMO] Queries: {scenario.queries}")
+
+    evaluator = Rome2RioInfoGathering(scenario.queries, mode=scenario.mode)
     reporter = ResultReporter()
 
     print(f"\n{'='*60}\nTASK: {scenario.task_prompt}\n{'='*60}")
     input("Press ENTER to launch browser...")
+    logger.info("[DEMO] Browser launching...")
 
     async with async_playwright() as p:
 
-        # ✅ Persistent context (KEY FIX)
+        # Dont usee channel = chrome , by using the it will try to launch system chrome, instead of playwright.
         context = await p.chromium.launch_persistent_context(
             user_data_dir="rome2rio_user_data",  # saves cookies/session
             headless=False,
-            channel="chrome",
+            # channel="chrome",
             viewport={"width": 1366, "height": 768},
             locale="en-IN",
             timezone_id=scenario.timezone,
-            args=[
-                "--start-maximized",
-                "--disable-blink-features=AutomationControlled"
-            ]
+            args=["--start-maximized", "--disable-blink-features=AutomationControlled"],
         )
 
         page = context.pages[0] if context.pages else await context.new_page()
+
+        def handle_console(msg):
+            try:
+                text = msg.text
+            except Exception:
+                text = msg.text()
+            if "[DEBUG JS]" in text:
+                print(text)
+
+        page.on("console", handle_console)
 
         # ✅ Go to site
         await page.goto(scenario.url, wait_until="domcontentloaded")
@@ -143,8 +319,7 @@ async def run_scenario(scenario):
 
         print("\n👉 If Cloudflare appears, solve it once manually.")
         await asyncio.to_thread(
-            input,
-            "\nNavigate to the page you want, then press ENTER to begin continuous scraping... "
+            input, "\nNavigate to the page you want, then press ENTER to begin continuous scraping... "
         )
 
         # ---------------- CONTINUOUS SCRAPING ----------------
@@ -153,23 +328,90 @@ async def run_scenario(scenario):
         stop_event = asyncio.Event()
 
         async def scrape_loop():
+            iteration = 0
             while not stop_event.is_set():
+                iteration += 1
                 try:
                     active_page = context.pages[-1]
-                    count_results     = await active_page.locator('[data-testid^="trip-search-result"]').count()
-                    count_schedules   = await active_page.locator('[aria-labelledby^="schedule-cell-times-"]').count()
-                    count_hotels      = await active_page.locator('[data-testid="hotel-list-item"]').count()
-                    count_experiences = await active_page.locator('article').count()
+                    page_url = active_page.url
+                    is_trip_details = "/trips?" in page_url
 
-                    if count_results > 0 or count_schedules > 0 or count_hotels > 0 or count_experiences > 0:
+                    # Count elements with detailed logging
+                    count_results = await active_page.locator('[data-testid^="trip-search-result"]').count()
+                    count_schedules = await active_page.locator('[aria-labelledby^="schedule-cell-times-"]').count()
+                    count_hotels = await active_page.locator('[data-testid="hotel-list-item"]').count()
+                    count_booking_hotels = await active_page.locator('[data-testid="property-card"]').count()
+                    count_booking_titles = await active_page.locator('[data-testid="title"]').count()
+                    count_experiences = await active_page.locator("article").count()
+
+                    if iteration == 1:
+                        print(f"\n[DEBUG] Page URL: {page_url}")
+
+                        if is_trip_details:
+                            print(f"[DEBUG]  On TRIP DETAILS page (trying to extract itinerary)")
+                        else:
+                            print(f"[DEBUG] On ROUTES LIST page")
+
+                        print(f"[DEBUG] Looking for elements with these selectors:")
+                        print(f'  - [data-testid^="trip-search-result"]: {count_results} found')
+                        print(f'  - [aria-labelledby^="schedule-cell-times-"]: {count_schedules} found')
+                        print(f'  - [data-testid="hotel-list-item"]: {count_hotels} found')
+                        print(f'  - [data-testid="property-card"]: {count_booking_hotels} found')
+                        print(f'  - [data-testid="title"]: {count_booking_titles} found')
+                        print(f"  - article (experiences): {count_experiences} found\n")
+
+                    if iteration % 5 == 1:  # Log every 5 iterations
+                        print(
+                            f"[ITER {iteration}] Results={count_results}, Schedules={count_schedules}, Hotels={count_hotels}, Booking={count_booking_hotels}, Exp={count_experiences}"
+                        )
+
+                    should_evaluate = (
+                        count_results > 0
+                        or count_schedules > 0
+                        or count_hotels > 0
+                        or count_booking_hotels > 0
+                        or count_booking_titles > 0
+                        or count_experiences > 0
+                        or is_trip_details
+                    )
+
+                    if should_evaluate:
+                        if (
+                            is_trip_details
+                            and count_results == 0
+                            and count_schedules == 0
+                            and count_hotels == 0
+                            and count_booking_hotels == 0
+                            and count_booking_titles == 0
+                            and count_experiences == 0
+                        ):
+                            print("  ✓ Trip details page detected. Running evaluator...")
+                        else:
+                            print(f"  ✓ Found elements! Running evaluator...")
                         await evaluator.update(page=active_page)
                         result = await evaluator.compute()
+                        print(f"  ✓ Result: {result.n_covered}/{result.n_queries} queries matched\n")
                         if result.score >= 1.0:
                             print("\n✅ All target queries covered!")
                             stop_event.set()
                             return
+                    else:
+                        if iteration == 1:
+                            print("[⚠️  WARNING] No route elements found on page!")
+                            print("    Possible causes:")
+                            if is_trip_details:
+                                print("    1. Trip details page is still loading")
+                                print("    2. Trip overview layout changed")
+                            else:
+                                print("    1. DOM selectors are outdated (Rome2Rio redesigned page)")
+                                print("    2. Page hasn't loaded yet")
+                                print("    3. Wrong page (not the search results page)")
+
                 except Exception as e:
                     print(f"[ERROR] {e}")
+                    import traceback
+
+                    traceback.print_exc()
                 await asyncio.sleep(3)
 
         async def wait_for_enter():
@@ -187,9 +429,13 @@ async def run_scenario(scenario):
 
 # ---------------- MAIN ----------------
 
+
 async def main():
     logger.remove()
-    logger.add(sys.stderr, format="<level>{message}</level>", level="INFO")
+    logger.add(sys.stderr, format="<level>{message}</level>", level="DEBUG")
+    logger.info("=" * 80)
+    logger.info("ROME2RIO DEMO STARTED")
+    logger.info("=" * 80)
 
     for i, s in enumerate(SCENARIOS, 1):
         print(f"[{i}] {s.name}")
@@ -197,7 +443,12 @@ async def main():
     choice = input("\nSelect scenario index: ")
 
     if choice.isdigit() and 1 <= int(choice) <= len(SCENARIOS):
+        logger.info(f"Selected scenario: {SCENARIOS[int(choice) - 1].name}")
         await run_scenario(SCENARIOS[int(choice) - 1])
+
+    logger.info("=" * 80)
+    logger.info("ROME2RIO DEMO ENDED")
+    logger.info("=" * 80)
 
 
 if __name__ == "__main__":
