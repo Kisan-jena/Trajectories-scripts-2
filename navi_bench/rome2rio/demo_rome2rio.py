@@ -162,6 +162,29 @@ SCENARIOS = [
         timezone="Asia/Kolkata",
     ),
     TaskScenario(
+        task_id="hindon_frankfurt_long_expensive",
+        name="Hindon to Frankfurt - Long and Expensive",
+        url="https://www.rome2rio.com/",
+        task_prompt=(
+            "Are there any routes from New Delhi to Frankfurt am Main departing "
+            "from Hindon? Tell me info about the top listing that takes longer "
+            "than 20 hours (1200 mins) and costs more than USD 1000."
+        ),
+        queries=[
+            [
+                {
+                    "origins": ["new delhi"],
+                    "destinations": ["frankfurt am main"],
+                    "modes": ["hindon"],
+                    "min_duration": 200,
+                    "min_price": 500.0,
+                }
+            ]
+        ],
+        mode="any",
+        timezone="Asia/Kolkata",
+    ),
+    TaskScenario(
         task_id="ams_keukenhof_shuttle",
         name="Amsterdam Keukenhof Shuttle",
         url="https://www.rome2rio.com/",

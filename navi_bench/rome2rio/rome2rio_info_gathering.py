@@ -39,6 +39,7 @@ class Info(TypedDict, total=False):
     location_score: float
     origin: str
     destination: str
+    route_text: str
 
 
 class FinalResult(BaseModel):
@@ -301,6 +302,20 @@ class Rome2RioInfoGathering(BaseMetric):
                 name = (info.get("name") or "").lower()
                 if not check(m.lower() in name for m in query["modes"]):
                     return False
+            elif page_type == "schedule":
+                mode = (info.get("mode") or "").lower()
+                route_text = (info.get("route_text") or "").lower()
+                haystack = f"{mode} {route_text}".strip()
+                if not check(m.lower() in haystack for m in query["modes"]):
+                    logger.debug(f"[DEBUG PY] Schedule mode check failed: looking for {query['modes']} in mode='{mode}' | route_text='{route_text}'")
+                    return False
+                else:
+                    for m in query["modes"]:
+                        m_lower = m.lower()
+                        if m_lower in mode:
+                            logger.debug(f"[DEBUG PY] ✓ Mode '{m}' matched in AIRLINES: {mode}")
+                        elif m_lower in route_text:
+                            logger.debug(f"[DEBUG PY] ✓ Mode '{m}' matched in ROUTE_TEXT: {route_text}")
             else:
                 mode = (info.get("mode") or "").lower()
                 if not check(m.lower() in mode for m in query["modes"]):
@@ -409,6 +424,12 @@ class Rome2RioInfoGathering(BaseMetric):
                 name = (info.get("name") or "").lower()
                 if not (all if self.mode == "all" else any)(m.lower() in name for m in query["modes"]):
                     reasons.append(f"mode/name doesn't contain any of {query['modes']}")
+            elif page_type == "schedule":
+                mode = (info.get("mode") or "").lower()
+                route_text = (info.get("route_text") or "").lower()
+                haystack = f"{mode} {route_text}".strip()
+                if not (all if self.mode == "all" else any)(m.lower() in haystack for m in query["modes"]):
+                    reasons.append(f"mode/route doesn't match {query['modes']} (airlines: '{mode}', route: '{route_text}')")
             else:
                 mode = (info.get("mode") or "").lower()
                 if not (all if self.mode == "all" else any)(m.lower() in mode for m in query["modes"]):

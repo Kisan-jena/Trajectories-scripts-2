@@ -115,6 +115,54 @@
     };
   })();
 
+  const routeFromQuery = (() => {
+    try {
+      const url = new URL(window.location.href);
+      const routeParam = url.searchParams.get('route');
+      if (!routeParam) return null;
+      const normalized = decodeURIComponent(routeParam)
+        .replace(/[-_]+/g, ' ')
+        .replace(/\bFly\b/gi, '')
+        .trim();
+      return normalized || null;
+    } catch (e) {
+      console.warn('[DEBUG JS] Failed to parse route query:', e);
+      return null;
+    }
+  })();
+
+  const extractScheduleRouteText = (card) => {
+    const parts = [];
+
+    if (routeFromPage.origin && routeFromPage.destination) {
+      parts.push(`${routeFromPage.origin} to ${routeFromPage.destination}`);
+    }
+
+    if (routeFromQuery) {
+      parts.push(routeFromQuery);
+    }
+
+    const cardText = card?.innerText || '';
+    const lines = cardText
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    const airportCandidates = lines.filter((line) => {
+      if (/airport/i.test(line)) return true;
+      if (/\b[A-Z]{3}\b/.test(line) && / - /.test(line)) return true;
+      return false;
+    });
+
+    const uniqueAirports = [...new Set(airportCandidates)];
+    if (uniqueAirports.length > 0) {
+      parts.push(...uniqueAirports);
+    }
+
+    const text = parts.filter(Boolean).join(' | ');
+    return text || null;
+  };
+
   // ==========================================
   // 1. ROUTE CARDS (The main search page)
   // ==========================================
@@ -228,6 +276,7 @@
         max_price,
         origin: routeFromPage.origin,
         destination: routeFromPage.destination,
+        route_text: extractScheduleRouteText(card),
         pageType: 'schedule',
       });
     } catch (e) {
