@@ -123,13 +123,38 @@ SCENARIOS = [
         queries=[
             [
                 {
-                    "origins": ["hindon"],
+                    "origins": ["delhi"],
                     "destinations": ["frankfurt"],
-                    "modes": ["indigo airlines", "emirates"],
+                    "modes": ["indigo airlines", "aegean airlines"],
                     "min_duration": 2010,
                     "max_duration": 2010,
                     "min_price": 500.0,
                     "max_price": 2000.0,
+                }
+            ]
+        ],
+        mode="all",
+        timezone="Asia/Kolkata",
+    ),
+    TaskScenario(
+        task_id="hindon_frankfurt_indigo_emirates",
+        name="Hindon to Frankfurt - IndiGo and Emirates",
+        url="https://www.rome2rio.com/",
+        task_prompt=(
+            "Tell me info about the top listing for a flight schedule from "
+            "Delhi (departing from Hindon) to Frankfurt on next Friday that "
+            "combines IndiGo Airlines and Scandinavian Airlines."
+        ),
+        queries=[
+            [
+                {
+                    "origins": ["delhi"],
+                    "destinations": ["frankfurt am main"],
+                    "modes": ["indigo airlines", "air india limited"],
+                    # "min_duration": 5,
+                    # "max_duration": 15,
+                    # "min_price": 1.0,
+                    # "max_price": 2.0,
                 }
             ]
         ],
@@ -150,9 +175,7 @@ SCENARIOS = [
                 {
                     "cities": ["amsterdam"],
                     "modes": ["keukenhof", "shuttle"],
-                    "min_rating": 4.6,
-                    "min_duration": 240,
-                    "max_duration": 240,
+                    "min_rating": 4,
                     "max_price": 700.0,
                 }
             ]
@@ -236,31 +259,6 @@ class ResultReporter:
 
                 print(line)
 
-            # If nothing matched, show what the query required
-            if result.n_covered == 0 and queries:
-                print("\nWHY DID IT FAIL? Query requirements:")
-                for qi, qgroup in enumerate(queries, 1):
-                    for q in qgroup:
-                        reqs = []
-                        if "max_duration" in q:
-                            reqs.append(f"duration ≤ {q['max_duration']} min")
-                        if "min_duration" in q:
-                            reqs.append(f"duration ≥ {q['min_duration']} min")
-                        if "max_price" in q:
-                            reqs.append(f"price ≤ {q['max_price']}")
-                        if "min_price" in q:
-                            reqs.append(f"price ≥ {q['min_price']}")
-                        if "modes" in q:
-                            reqs.append(f"mode in {q['modes']}")
-                        if "cities" in q:
-                            reqs.append(f"cities in {q['cities']}")
-                        if "min_stars" in q:
-                            reqs.append(f"min_stars ≥ {q['min_stars']}")
-                        if "max_stars" in q:
-                            reqs.append(f"max_stars ≤ {q['max_stars']}")
-                        if "min_score" in q:
-                            reqs.append(f"min_score ≥ {q['min_score']}")
-                        print(f"  Query {qi}: {', '.join(reqs) or 'no constraints'}")
         print("=" * 80)
 
 

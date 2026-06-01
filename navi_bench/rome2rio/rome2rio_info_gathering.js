@@ -39,6 +39,82 @@
     return value;
   };
 
+  const extractRouteFromHeader = () => {
+    const selectors = [
+      '[data-testid="map-header"]',
+      '[data-testid="route-header"]',
+      '[data-testid="trip-title"]',
+      'header h1',
+      'h1',
+      'h2',
+    ];
+    const arrow = '\u2192';
+
+    const splitRouteText = (text) => {
+      const normalized = String(text).replace(/\s+/g, ' ').trim();
+      if (!normalized) return null;
+      if (normalized.includes(arrow)) {
+        const parts = normalized.split(arrow).map((p) => p.trim());
+        if (parts.length >= 2) return { origin: parts[0], destination: parts[1] };
+      }
+      const lower = normalized.toLowerCase();
+      const toIndex = lower.indexOf(' to ');
+      if (toIndex > 0) {
+        return {
+          origin: normalized.slice(0, toIndex).trim(),
+          destination: normalized.slice(toIndex + 4).trim(),
+        };
+      }
+      const dashIndex = normalized.indexOf(' - ');
+      if (dashIndex > 0) {
+        return {
+          origin: normalized.slice(0, dashIndex).trim(),
+          destination: normalized.slice(dashIndex + 3).trim(),
+        };
+      }
+      return null;
+    };
+
+    for (const selector of selectors) {
+      const elements = document.querySelectorAll(selector);
+      for (const el of elements) {
+        const parsed = splitRouteText(el.textContent || '');
+        if (parsed?.origin && parsed?.destination) return parsed;
+      }
+    }
+
+    const titleParsed = splitRouteText(document.title || '');
+    if (titleParsed?.origin && titleParsed?.destination) return titleParsed;
+
+    return { origin: null, destination: null };
+  };
+
+  const routeFromPath = (() => {
+    try {
+      const parts = window.location.pathname.split('/').filter(Boolean);
+      const mapIndex = parts.indexOf('map');
+      if (mapIndex >= 0 && parts.length >= mapIndex + 3) {
+        const normalize = (slug) =>
+          decodeURIComponent(slug).replace(/-/g, ' ').trim();
+        return {
+          origin: normalize(parts[mapIndex + 1]),
+          destination: normalize(parts[mapIndex + 2]),
+        };
+      }
+    } catch (e) {
+      console.warn('[DEBUG JS] Failed to parse route from URL:', e);
+    }
+    return { origin: null, destination: null };
+  })();
+
+  const routeFromPage = (() => {
+    const headerRoute = extractRouteFromHeader();
+    return {
+      origin: headerRoute.origin || routeFromPath.origin,
+      destination: headerRoute.destination || routeFromPath.destination,
+    };
+  })();
+
   // ==========================================
   // 1. ROUTE CARDS (The main search page)
   // ==========================================
@@ -150,6 +226,8 @@
         duration,
         min_price,
         max_price,
+        origin: routeFromPage.origin,
+        destination: routeFromPage.destination,
         pageType: 'schedule',
       });
     } catch (e) {
