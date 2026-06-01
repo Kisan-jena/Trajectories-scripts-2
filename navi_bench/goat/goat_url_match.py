@@ -116,6 +116,7 @@ class GoatUrlMatch(BaseMetric):
         self._found_match = False
         self._agent_url = ""
         self._matched_gt_url = ""
+        self._last_gt_url = ""
         self._match_details: dict = {}
 
     async def reset(self) -> None:
@@ -123,6 +124,7 @@ class GoatUrlMatch(BaseMetric):
         self._found_match = False
         self._agent_url = ""
         self._matched_gt_url = ""
+        self._last_gt_url = ""
         self._match_details = {}
 
     async def update(self, **kwargs) -> None:
@@ -153,6 +155,8 @@ class GoatUrlMatch(BaseMetric):
 
         for gt_url in self.gt_urls:
 
+            self._last_gt_url = gt_url
+
             match, details = self._urls_match(
                 url,
                 gt_url,
@@ -165,6 +169,8 @@ class GoatUrlMatch(BaseMetric):
                 self._match_details = details
 
                 return
+
+            self._match_details = details
 
     def __repr__(self) -> str:
 
@@ -187,7 +193,7 @@ class GoatUrlMatch(BaseMetric):
             score=1.0 if self._found_match else 0.0,
             match=self._found_match,
             agent_url=self._agent_url,
-            gt_url=self._matched_gt_url,
+            gt_url=self._matched_gt_url or self._last_gt_url,
             details=self._match_details,
         )
 
@@ -493,6 +499,27 @@ class GoatUrlMatch(BaseMetric):
 # FILTER MATCHER
 # =====================================================================
 
+    def _brands_compatible(
+        self,
+        gt_brand: str,
+        agent_brand: str,
+    ) -> bool:
+        """Check if two brands are compatible/equivalent."""
+        
+        # Exact match or token equivalent
+        if self._token_equivalent(gt_brand, agent_brand):
+            return True
+        
+        # Check if one brand name is contained in the other (case-insensitive)
+        # E.g., "casio" is in "g-shock by casio" → compatible
+        gt_lower = gt_brand.lower()
+        agent_lower = agent_brand.lower()
+        
+        if gt_lower in agent_lower or agent_lower in gt_lower:
+            return True
+        
+        return False
+
     def _match_filters(
         self,
         agent: dict,
@@ -524,8 +551,14 @@ class GoatUrlMatch(BaseMetric):
 
             for gt_val in gt_vals:
 
+                # Use brand-specific matching for "brands" key
+                if key == "brands":
+                    match_fn = self._brands_compatible
+                else:
+                    match_fn = self._token_equivalent
+
                 if not any(
-                    self._token_equivalent(
+                    match_fn(
                         gt_val,
                         agent_val,
                     )

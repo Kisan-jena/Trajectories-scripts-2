@@ -61,6 +61,35 @@ SCENARIOS: list[TaskScenario] = [
             "airlines": ["indigo"],
             "require_direct": True,
         }]]
+    ),
+    TaskScenario(
+        task_id="kayak/hotels/seattle_premium_score_price",
+        name="Seattle Premium Hotels - Score 8.3+ Over $224",
+        description=(
+            "Search for premium hotel options in Seattle with "
+            "at least 3 stars, a review score of 8.3 or higher, "
+            "and prices above $224."
+        ),
+        url="https://www.kayak.com/",
+        task_prompt=(
+            "Look for 3-star or higher hotels in Seattle for "
+            "upcoming Monday with a score of at least 8.3 "
+            "that cost over $224. "
+            "If hotel options are found, respond with "
+            "'Yes, there is at least one option' and the price. "
+            "If no options are found, respond with exactly: "
+            "'No options found'."
+        ),
+        queries=[
+            [
+                {
+                    "cities": ["seattle"],
+                    "min_stars": 3,
+                    "min_score": 8.3,
+                    "min_price": 224.0,
+                }
+            ]
+        ]
     )
 ]
 

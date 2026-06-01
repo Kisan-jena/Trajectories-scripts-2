@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from playwright.async_api import async_playwright
 from loguru import logger
 
+
 from navi_bench.goat.goat_url_match import (
     GoatUrlMatch,
     generate_task_config,
@@ -90,6 +91,29 @@ SCENARIOS: list[TaskScenario] = [
         timezone="America/Chicago",
     ),
 
+    TaskScenario(
+        task_id="goat/search/casio_gshock_mens_watches",
+        name="Search Casio G-SHOCK Men's Watches",
+        task=(
+        "Search for mens watches and narrow the results "
+        "to Casio and G-SHOCK by Casio models only for men. "
+        "Filter the results to show only watches that are currently in stock."
+        ),
+        url="https://www.goat.com",
+        gt_url=[
+        (
+            "https://www.goat.com/search"
+            "?query=mens+watches"
+            "&pageNumber=1"
+            "&brands=Casio%2CG-SHOCK+by+Casio"
+            "&genders=men"
+            "&inStock=true"
+        )
+        ],
+        location="United States",
+        timezone="America/Chicago",
+    ),
+
     # -------------------------------------------------------------------------
     # BRAND
     # -------------------------------------------------------------------------
@@ -101,6 +125,43 @@ SCENARIOS: list[TaskScenario] = [
         url="https://www.goat.com",
         gt_url=[
             "https://www.goat.com/brand/nike"
+        ],
+        location="United States",
+        timezone="America/Chicago",
+    ),
+    TaskScenario(
+        task_id="goat/search/adidas_mens_sweatpants_monochrome",
+        name="Search Adidas Men's Monochrome Sweatpants",
+        task=(
+            "Navigate to the adidas brand page under Featured Brands and "
+            "filter for Sweatpants within the Bottoms section. "
+            "Filter for mens sizing and only show items in white, grey, or black. "
+            "Sort the results by price high to low."
+        ),
+        url="https://www.goat.com",
+        gt_url=[
+            (
+                "https://www.goat.com/brand/adidas"
+                "?slug=adidas"
+                "&pageNumber=1"
+                "&activities=%2CSweatpants"
+                "&genders=men"
+                "&colors=white%2Cgrey%2Cblack"
+                "&sortType=price_high_low"
+                "&categories=Apparel"
+                "&types=%2CBottoms"
+            ),
+            (
+                "https://www.goat.com/search"
+                "?query=adidas+sweatpants"
+                "&pageNumber=1"
+                "&categories=Apparel"
+                "&types=%2CBottoms"
+                "&activities=%2CSweatpants"
+                "&sortType=price_high_low"
+                "&genders=men"
+                "&colors=black%2Cgrey%2Cwhite"
+            )
         ],
         location="United States",
         timezone="America/Chicago",
@@ -219,6 +280,8 @@ SCENARIOS: list[TaskScenario] = [
         location="United States",
         timezone="America/Chicago",
     ),
+
+    
 ]
 
 
@@ -330,24 +393,39 @@ class ResultReporter:
 
         print(f"Score  : {result.score}")
 
+        if result.agent_url:
+
+            print("\nAgent URL:")
+
+            print(f"  {result.agent_url}")
+
         print("\nFinal URL:")
 
         print(f"  {final_url}")
 
-        print("\nMatched GT URL:")
+        print("\nExpected / Matched GT URL:")
 
-        print(
-            f"  {evaluator._matched_gt_url}"
-        )
+        print(f"  {result.gt_url or evaluator._matched_gt_url}")
+
+        if not result.match:
+
+            print("\nGT URLs checked:")
+
+            for gt_url in getattr(evaluator, "gt_urls", []):
+
+                print(f"  - {gt_url}")
 
         if not result.match:
 
             print("\nMismatches:")
 
-            for m in result.details.get(
-                "mismatches",
-                [],
-            ):
+            mismatches = result.details.get("mismatches", [])
+
+            if not mismatches:
+
+                print("  (none recorded)")
+
+            for m in mismatches:
 
                 print(f"  - {m}")
 
