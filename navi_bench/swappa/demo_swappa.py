@@ -20,10 +20,12 @@ import asyncio
 import csv
 import json
 import os
+import random
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from playwright.async_api import async_playwright
+
 from loguru import logger
 
 # Import Swappa evaluator
@@ -39,28 +41,6 @@ from navi_bench.swappa.swappa_url_match import (
 # =============================================================================
 
 @dataclass
-class BrowserConfig:
-    """Browser launch configuration for stealth operation."""
-    headless: bool = False
-    viewport_width: int = 1366
-    viewport_height: int = 768
-    user_agent: str = (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    )
-    locale: str = "en-US"
-
-    # Anti-detection arguments
-    launch_args: list = field(default_factory=lambda: [
-        "--disable-blink-features=AutomationControlled",
-        "--disable-infobars",
-        "--start-maximized",
-        "--no-sandbox",
-        "--disable-web-security",
-    ])
-
-
-@dataclass
 class TaskScenario:
     """Defines a Swappa verification task scenario."""
     task_id: str
@@ -72,10 +52,12 @@ class TaskScenario:
     location: str
     timezone: str
     category: str
-    tags: list = field(default_factory=list)
+    tags: list = None
 
     def __post_init__(self):
         """Validate scenario configuration."""
+        if self.tags is None:
+            self.tags = []
         assert self.task_id, "task_id is required"
         assert self.gt_urls, "gt_urls cannot be empty"
 
@@ -86,14 +68,15 @@ class TaskScenario:
 
 SCENARIOS: list[TaskScenario] = [
 
-    # =========================================================================
-    # PRODUCT NAVIGATION — Navigate to the correct product listing page
-    # =========================================================================
-
     TaskScenario(
         task_id="swappa/product_nav/0",
         name="iPhone 15 Pro - Mint, White, 512GB, A2848",
-        description="Navigate to iPhone 15 Pro with mint condition, white color, 512GB, A2848 variant, cheapest first, accepting credit cards and PhoneCheck certified.",
+        description=(
+            "Navigate to iPhone 15 Pro listings with mint condition, "
+            "white color, 512GB storage, A2848 variant, sorted from "
+            "lowest price first, with PhoneCheck certified listings "
+            "that accept credit card payments."
+        ),
         url="https://swappa.com/",
         task_prompt=(
             "My cousin has been saving up for months to finally upgrade his phone and "
@@ -107,428 +90,38 @@ SCENARIOS: list[TaskScenario] = [
             "sort the listings from lowest price to highest first."
         ),
         gt_urls=[
-            "https://swappa.com/listings/apple-iphone-15-pro?condition=mint&color=white&storage=512gb&modeln=QTI4NDg&sort=price_low&accepts_stripe=on&phone_check_certified=on"
+            (
+                "https://swappa.com/listings/apple-iphone-15-pro"
+                "?condition=mint"
+                "&color=white"
+                "&storage=512gb"
+                "&modeln=QTI4NDg"
+                "&sort=price_low"
+                "&accepts_stripe=on"
+                "&phone_check_certified=on"
+            )
         ],
         location="United States",
         timezone="America/Los_Angeles",
         category="product_navigation",
-        tags=["iphone", "multi_filter", "modeln", "checkboxes", "sort"],
-    ),
-
-    TaskScenario(
-        task_id="swappa/product_nav/1",
-        name="Galaxy S24 Ultra - Good, 256GB, Newest",
-        description="Navigate to Samsung Galaxy S24 Ultra with good condition, 256GB, model number, newest first, PhoneCheck and international.",
-        url="https://swappa.com/",
-        task_prompt=(
-            "One of my friends has been trying to replace his old phone so search "
-            "for Samsung Galaxy S24 Ultra listings and filter for good condition "
-            "with the 256GB storage option and the SM-S928U1 model variant. Sort "
-            "the results by newest listings first and make sure only phone check "
-            "certified and international shipping listings are shown."
-        ),
-        gt_urls=[
-            "https://swappa.com/listings/samsung-galaxy-s24-ultra?condition=good&storage=256gb&modeln=U00tUzkyOFUx&sort=listing_created_newest&phone_check_certified=on&international=on"
+        tags=[
+            "iphone",
+            "multi_filter",
+            "modeln",
+            "checkboxes",
+            "sort",
         ],
-        location="United States",
-        timezone="America/Los_Angeles",
-        category="product_navigation",
-        tags=["samsung", "multi_filter", "modeln", "checkboxes", "sort"],
     ),
-
-    TaskScenario(
-        task_id="swappa/product_nav/4",
-        name="MacBook Air 2023 15\" - Mint, Space Gray, 1TB, 24GB, M2",
-        description="Navigate to MacBook Air with condition, color, storage, memory, processor filters.",
-        url="https://swappa.com/",
-        task_prompt=(
-            "I'm looking for a MacBook Air M2 on Swappa. Find the 2023 15-inch "
-            "model in mint condition with the space gray color option, 1TB storage, "
-            "24GB memory, and the Apple M2 processor. Sort by lowest price first."
-        ),
-        gt_urls=[
-            "https://swappa.com/listings/apple-macbook-air-2023-15?condition=mint&color=space-gray&storage=1tb&memory=24gb&processor=apple-m2&sort=price_low"
-        ],
-        location="United States",
-        timezone="America/Los_Angeles",
-        category="product_navigation",
-        tags=["macbook", "laptop", "memory", "processor", "sort"],
-    ),
-
-    # =========================================================================
-    # CARRIER SELECTION — Navigate + select carrier filter
-    # =========================================================================
-
-    TaskScenario(
-        task_id="swappa/carrier/0",
-        name="iPhone 11 Pro Max - Unlocked, Green, 64GB",
-        description="Find unlocked iPhone 11 Pro Max with green color, 64GB, model number, price high, accepting credit cards and international.",
-        url="https://swappa.com/",
-        task_prompt=(
-            "My older brother wants to keep his current phone for at least another "
-            "three years, so he has been obsessing over finding a deal that actually "
-            "makes sense. Search for Apple iPhone 11 Pro Max listings that are "
-            "unlocked in green color with 64GB storage and the A2161 model variant. "
-            "Sort results by highest price first and make sure listings accept credit "
-            "card payments and offer international shipping."
-        ),
-        gt_urls=[
-            "https://swappa.com/listings/apple-iphone-11-pro-max?carrier=unlocked&color=green&storage=64gb&modeln=QTIxNjE&sort=price_high&accepts_stripe=on&international=on"
-        ],
-        location="United States",
-        timezone="America/Los_Angeles",
-        category="carrier_selection",
-        tags=["iphone", "unlocked", "modeln", "sort", "checkboxes"],
-    ),
-
-    TaskScenario(
-        task_id="swappa/carrier/1",
-        name="Galaxy S24 - AT&T, Good, Black, 128GB",
-        description="Find AT&T Samsung Galaxy S24 in good condition with black color, 128GB, model number, price high, credit cards and PhoneCheck.",
-        url="https://swappa.com/",
-        task_prompt=(
-            "My friend has been trying to cut down on unnecessary spending this year, "
-            "so he made a rule for himself that every major purchase has to earn its "
-            "value. Find Samsung Galaxy S24 listings in good condition on AT&T carrier "
-            "with black color and 128GB storage. Select the SM-S921U1 model variant. "
-            "Sort by highest price first and make sure only credit card accepted and "
-            "PhoneCheck certified listings show."
-        ),
-        gt_urls=[
-            "https://swappa.com/listings/samsung-galaxy-s24?condition=good&carrier=att&color=black&storage=128gb&modeln=U00tUzkyMVUx&sort=price_high&accepts_stripe=on&phone_check_certified=on"
-        ],
-        location="United States",
-        timezone="America/Los_Angeles",
-        category="carrier_selection",
-        tags=["samsung", "att", "modeln", "sort", "checkboxes"],
-    ),
-
-    TaskScenario(
-        task_id="swappa/carrier/3",
-        name="Pixel 8 - T-Mobile, Good, Hazel, 256GB",
-        description="Find T-Mobile Google Pixel 8 in good condition with hazel color, 256GB, model number, price high, and exclude businesses.",
-        url="https://swappa.com/",
-        task_prompt=(
-            "Search for Google Pixel 8 listings in good condition on T-Mobile carrier "
-            "with hazel color and 256GB storage. Select the G9BQD model variant. "
-            "Sort by highest price first and exclude business sellers."
-        ),
-        gt_urls=[
-            "https://swappa.com/listings/google-pixel-8?condition=good&carrier=t-mobile&color=hazel&storage=256gb&modeln=RzlCUUQ&sort=price_high&exclude_businesses=on"
-        ],
-        location="United States",
-        timezone="America/Los_Angeles",
-        category="carrier_selection",
-        tags=["pixel", "tmobile", "modeln", "sort", "checkboxes"],
-    ),
-
-    # =========================================================================
-    # CONDITION FILTER — Navigate + condition filter
-    # =========================================================================
-
-    TaskScenario(
-        task_id="swappa/condition/0",
-        name="iPhone 15 - Mint, Unlocked, Black, 128GB",
-        description="Find mint condition unlocked iPhone 15 in black, 128GB, sorted by price high, accepting credit cards.",
-        url="https://swappa.com/",
-        task_prompt=(
-            "One of my friends has been putting off upgrading his phone because he "
-            "usually keeps devices for years and hates dealing with repair headaches "
-            "once the warranty ends. Find Apple iPhone 15 listings in mint condition "
-            "that are unlocked with black color and 128GB storage. Sort results by "
-            "highest price first and make sure listings accept credit card payments."
-        ),
-        gt_urls=[
-            "https://swappa.com/listings/apple-iphone-15?condition=mint&carrier=unlocked&color=black&storage=128gb&sort=price_high&accepts_stripe=on"
-        ],
-        location="United States",
-        timezone="America/Los_Angeles",
-        category="condition_filter",
-        tags=["iphone", "mint", "unlocked", "sort", "checkboxes"],
-    ),
-
-    TaskScenario(
-        task_id="swappa/condition/2",
-        name="iPhone 15 Pro Max - New, Verizon, White, 256GB",
-        description="Find new condition Verizon iPhone 15 Pro Max in white, 256GB, model number, cheapest first, PhoneCheck and international.",
-        url="https://swappa.com/",
-        task_prompt=(
-            "Find new condition Apple iPhone 15 Pro Max listings on Verizon carrier "
-            "with white color and 256GB storage. Select the A2849 model variant. Sort "
-            "by lowest price first and make sure only PhoneCheck certified and "
-            "international shipping listings are shown."
-        ),
-        gt_urls=[
-            "https://swappa.com/listings/apple-iphone-15-pro-max?condition=new&carrier=verizon&color=white&storage=256gb&modeln=QTI4NDk&sort=price_low&phone_check_certified=on&international=on"
-        ],
-        location="United States",
-        timezone="America/Los_Angeles",
-        category="condition_filter",
-        tags=["iphone", "new", "verizon", "modeln", "checkboxes"],
-    ),
-
-    TaskScenario(
-        task_id="swappa/condition/3",
-        name="iPhone 14 - Fair, Verizon, Midnight, 256GB",
-        description="Find fair condition Verizon iPhone 14 in midnight, 256GB, model number, cheapest first.",
-        url="https://swappa.com/",
-        task_prompt=(
-            "I want a fair condition Verizon iPhone 14 in the midnight color with "
-            "256GB storage. Select the A2649 model variant. Sort by lowest price "
-            "first and report the URL."
-        ),
-        gt_urls=[
-            "https://swappa.com/listings/apple-iphone-14?condition=fair&carrier=verizon&color=midnight&storage=256gb&modeln=QTI2NDk&sort=price_low"
-        ],
-        location="United States",
-        timezone="America/Los_Angeles",
-        category="condition_filter",
-        tags=["iphone", "fair", "verizon", "modeln", "sort"],
-    ),
-
-    # =========================================================================
-    # STORAGE COMBO — Carrier + storage combinations
-    # =========================================================================
-
-    TaskScenario(
-        task_id="swappa/storage/0",
-        name="iPhone 15 - Unlocked, Green, 256GB, Full Checkboxes",
-        description="Find unlocked iPhone 15 in green, 256GB, model number, cheapest first, all three checkboxes enabled.",
-        url="https://swappa.com/",
-        task_prompt=(
-            "My friend has been trying to move away from locked carrier contracts "
-            "after realizing how much flexibility he loses whenever he travels or "
-            "wants to switch providers. Find Apple iPhone 15 listings that are "
-            "unlocked in green color with 256GB storage and the A2846 model variant. "
-            "Sort by lowest price first and make sure listings accept credit cards, "
-            "are PhoneCheck certified, and offer international shipping."
-        ),
-        gt_urls=[
-            "https://swappa.com/listings/apple-iphone-15?carrier=unlocked&color=green&storage=256gb&modeln=QTI4NDY&sort=price_low&accepts_stripe=on&phone_check_certified=on&international=on"
-        ],
-        location="United States",
-        timezone="America/Los_Angeles",
-        category="storage_combo",
-        tags=["iphone", "unlocked", "modeln", "sort", "all_checkboxes"],
-    ),
-
-    TaskScenario(
-        task_id="swappa/storage/4",
-        name="iPhone 15 Pro - Verizon, Black, 1TB",
-        description="Find Verizon iPhone 15 Pro in black, 1TB, model number, cheapest first, PhoneCheck certified.",
-        url="https://swappa.com/",
-        task_prompt=(
-            "Find Verizon iPhone 15 Pro listings in black color with 1TB storage "
-            "and the A2848 model variant. Sort by lowest price first and make sure "
-            "only PhoneCheck certified listings are shown."
-        ),
-        gt_urls=[
-            "https://swappa.com/listings/apple-iphone-15-pro?carrier=verizon&color=black&storage=1tb&modeln=QTI4NDg&sort=price_low&phone_check_certified=on"
-        ],
-        location="United States",
-        timezone="America/Los_Angeles",
-        category="storage_combo",
-        tags=["iphone", "verizon", "1tb", "modeln", "checkboxes"],
-    ),
-
-    # =========================================================================
-    # RED HERRING — Irrelevant narrative mixed with real filters
-    # =========================================================================
-
-    TaskScenario(
-        task_id="swappa/red_herring/0",
-        name="iPhone 15 - Pink, Verizon, Mint (Dance Class Narrative)",
-        description="Red herring narrative about dance classes; real filters are iPhone 15, mint, Verizon, pink, 128GB, model number, newest first.",
-        url="https://swappa.com/",
-        task_prompt=(
-            "My friend recently started taking dance and theater classes on weekends, "
-            "and he wanted a phone that actually feels fun and expressive instead of "
-            "always going with the safe neutral option. Search for Apple iPhone 15 "
-            "listings in mint condition on Verizon carrier with the pink color and "
-            "128GB storage. Select the A2846 model variant. Sort by newest listings "
-            "first. The dance classes are irrelevant to the search."
-        ),
-        gt_urls=[
-            "https://swappa.com/listings/apple-iphone-15?condition=mint&carrier=verizon&color=pink&storage=128gb&modeln=QTI4NDY&sort=listing_created_newest"
-        ],
-        location="United States",
-        timezone="America/Los_Angeles",
-        category="red_herring",
-        tags=["iphone", "red_herring", "narrative", "modeln", "sort"],
-    ),
-
-    TaskScenario(
-        task_id="swappa/red_herring/1",
-        name="iPhone 15 Pro Max - Drone Photography Narrative",
-        description="Red herring narrative about drone photography; real filters are iPhone 15 Pro Max, good, unlocked, 256GB, model number, newest, credit cards and international.",
-        url="https://swappa.com/",
-        task_prompt=(
-            "My friend recently started taking freelance drone photography jobs on "
-            "weekends, but he keeps running into storage problems because he transfers "
-            "huge batch files from his drone to his phone for quick edits. None of that "
-            "is relevant to Swappa filters. Find Apple iPhone 15 Pro Max in good "
-            "condition, unlocked, 256GB storage, A2849 model variant. Sort by newest "
-            "first and make sure listings accept credit cards and offer international "
-            "shipping."
-        ),
-        gt_urls=[
-            "https://swappa.com/listings/apple-iphone-15-pro-max?condition=good&carrier=unlocked&storage=256gb&modeln=QTI4NDk&sort=listing_created_newest&accepts_stripe=on&international=on"
-        ],
-        location="United States",
-        timezone="America/Los_Angeles",
-        category="red_herring",
-        tags=["iphone", "red_herring", "narrative", "modeln", "checkboxes"],
-    ),
-
-    TaskScenario(
-        task_id="swappa/red_herring/4",
-        name="MacBook Air M2 - Overheating Laptop Narrative",
-        description="Red herring about overheating laptop; real filters are MacBook Air 2022, mint, 256GB, 16GB memory, Apple M2 processor, cheapest first.",
-        url="https://swappa.com/",
-        task_prompt=(
-            "My laptop is overheating and the fans sound like a jet engine. The Geek "
-            "Squad quoted $180 for cleaning but I'd rather buy a used MacBook Air M2. "
-            "The overheating doesn't affect the search. Find MacBook Air 2022 13-inch "
-            "listings in mint condition with 256GB storage, 16GB memory, and the Apple "
-            "M2 processor. Sort by cheapest first."
-        ),
-        gt_urls=[
-            "https://swappa.com/listings/macbook-air-2022-13?condition=mint&storage=256gb&memory=16gb&processor=apple-m2&sort=price_low"
-        ],
-        location="United States",
-        timezone="America/Los_Angeles",
-        category="red_herring",
-        tags=["macbook", "red_herring", "laptop", "memory", "processor"],
-    ),
-
-    # =========================================================================
-    # MULTI FILTER — 3+ filters combined
-    # =========================================================================
-
-    TaskScenario(
-        task_id="swappa/multi_filter/0",
-        name="iPhone 15 - Mint, Unlocked, Pink, 128GB, Model",
-        description="Multiple filters: condition, carrier, color, storage, model number, sort by cheapest.",
-        url="https://swappa.com/",
-        task_prompt=(
-            "I've been scouring the market for a solid upgrade and I've finally set "
-            "my sights on an Apple iPhone 15. Find listings in mint condition that "
-            "are unlocked with the pink color, 128GB storage, and the A2846 model "
-            "variant. Sort by lowest price first."
-        ),
-        gt_urls=[
-            "https://swappa.com/listings/apple-iphone-15?condition=mint&carrier=unlocked&color=pink&storage=128gb&modeln=QTI4NDY&sort=price_low"
-        ],
-        location="United States",
-        timezone="America/Los_Angeles",
-        category="multi_filter",
-        tags=["iphone", "multi_filter", "modeln", "sort"],
-    ),
-
-    TaskScenario(
-        task_id="swappa/multi_filter/2",
-        name="iPhone 15 Pro Max - AT&T, Good, Black, 512GB",
-        description="Multiple filters: condition, carrier, color, storage, cheapest first, PhoneCheck and international.",
-        url="https://swappa.com/",
-        task_prompt=(
-            "Find AT&T iPhone 15 Pro Max in good condition with black color and "
-            "512GB storage. Sort by cheapest first and make sure only PhoneCheck "
-            "certified and international shipping listings are shown."
-        ),
-        gt_urls=[
-            "https://swappa.com/listings/apple-iphone-15-pro-max?condition=good&carrier=att&color=black&storage=512gb&sort=price_low&phone_check_certified=on&international=on"
-        ],
-        location="United States",
-        timezone="America/Los_Angeles",
-        category="multi_filter",
-        tags=["iphone", "att", "multi_filter", "checkboxes", "sort"],
-    ),
-
-    TaskScenario(
-        task_id="swappa/multi_filter/4",
-        name="Pixel 8 Pro - Unlocked, Good, Bay, 128GB, Edition",
-        description="Multiple filters including edition (base64-encoded), condition, carrier, color, storage, cheapest first.",
-        url="https://swappa.com/",
-        task_prompt=(
-            "Find Google Pixel 8 Pro listings in good condition, unlocked, bay color, "
-            "128GB storage. Select the mmWave 5G edition. Sort by cheapest first and "
-            "make sure only PhoneCheck certified listings are shown."
-        ),
-        gt_urls=[
-            "https://swappa.com/listings/google-pixel-8-pro?condition=good&carrier=unlocked&color=bay&storage=128gb&edition=bW1XYXZlIDVH&sort=price_low&phone_check_certified=on"
-        ],
-        location="United States",
-        timezone="America/Los_Angeles",
-        category="multi_filter",
-        tags=["pixel", "multi_filter", "edition", "checkboxes", "sort"],
-    ),
-
-    # =========================================================================
-    # ULTRA HARD — Narrative + arithmetic + multi-filter
-    # =========================================================================
-
-    TaskScenario(
-        task_id="swappa/ultra_hard/0",
-        name="iPhone 15 - Budget Upgrade from iPhone 13",
-        description="Sold iPhone 13 for $350, upgrading to iPhone 15. Mint, unlocked, black, 128GB, model number, cheapest first.",
-        url="https://swappa.com/",
-        task_prompt=(
-            "I just finished selling my old iPhone 13 and I'm determined to turn "
-            "that cash into a newer Apple iPhone 15 without dipping into my savings. "
-            "I've been agonizing over every detail because I want this phone to last. "
-            "Find listings in mint condition that are unlocked with black color, "
-            "128GB storage, and the A2846 model variant. Sort by cheapest first so "
-            "I can stay within my $350 budget."
-        ),
-        gt_urls=[
-            "https://swappa.com/listings/apple-iphone-15?condition=mint&carrier=unlocked&color=black&storage=128gb&modeln=QTI4NDY&sort=price_low"
-        ],
-        location="United States",
-        timezone="America/Los_Angeles",
-        category="ultra_hard",
-        tags=["iphone", "ultra_hard", "budget", "narrative", "modeln"],
-    ),
-
-    TaskScenario(
-        task_id="swappa/ultra_hard/5",
-        name="iPhone 15 Pro Max - Biggest iPhone, Most Storage",
-        description="Wants biggest iPhone with most storage. Unlocked, good, black, 1TB, model number, cheapest, PhoneCheck + international.",
-        url="https://swappa.com/",
-        task_prompt=(
-            "I want the biggest iPhone with the most storage. That's the iPhone 15 "
-            "Pro Max with 1TB. Find listings in good condition, unlocked, black color, "
-            "with the A2849 model variant. Sort by cheapest first and make sure "
-            "PhoneCheck certified and international shipping listings are shown."
-        ),
-        gt_urls=[
-            "https://swappa.com/listings/apple-iphone-15-pro-max?condition=good&carrier=unlocked&color=black&storage=1tb&modeln=QTI4NDk&sort=price_low&phone_check_certified=on&international=on"
-        ],
-        location="United States",
-        timezone="America/Los_Angeles",
-        category="ultra_hard",
-        tags=["iphone", "ultra_hard", "1tb", "modeln", "checkboxes"],
-    ),
-
-    TaskScenario(
-        task_id="swappa/ultra_hard/9",
-        name="Galaxy S24 Ultra - Partner Budget $500",
-        description="Partner and I each have $250, total $500 for Galaxy S24 Ultra. Good, unlocked, violet, 512GB, cheapest.",
-        url="https://swappa.com/",
-        task_prompt=(
-            "My partner and I each have $250 — total $500 for a Galaxy S24 Ultra. "
-            "Unlocked, good condition, violet color, 512GB storage. The Ultra has the "
-            "S Pen which is nice but not a filter. Sort by cheapest first."
-        ),
-        gt_urls=[
-            "https://swappa.com/listings/samsung-galaxy-s24-ultra?condition=good&carrier=unlocked&color=violet&storage=512gb&sort=price_low"
-        ],
-        location="United States",
-        timezone="America/Los_Angeles",
-        category="ultra_hard",
-        tags=["samsung", "ultra_hard", "budget", "narrative"],
-    ),
-
 ]
+
+
+# =============================================================================
+# HELPER FUNCTIONS
+# =============================================================================
+
+async def human_delay(a: float = 1.0, b: float = 3.0) -> None:
+    """Random human-like delay between interactions."""
+    await asyncio.sleep(random.uniform(a, b))
 
 
 # =============================================================================
@@ -536,67 +129,88 @@ SCENARIOS: list[TaskScenario] = [
 # =============================================================================
 
 class BrowserManager:
-    """Manages browser lifecycle with stealth configuration."""
+    """Manages browser lifecycle with stealth configuration using REAL Chrome."""
 
-    def __init__(self, config: BrowserConfig = None):
-        self.config = config or BrowserConfig()
+    def __init__(self):
         self.browser = None
         self.context = None
         self.page = None
 
-    async def launch(self, playwright) -> tuple:
-        """Launch browser with stealth configuration."""
-        self.browser = await playwright.chromium.launch(
-            headless=self.config.headless,
-            args=self.config.launch_args,
+    async def launch(self, playwright):
+        """
+        Launch REAL Chrome with persistent profile.
+        Much harder for Swappa/Cloudflare to detect.
+        """
+        # Create persistent Chrome profile directory
+        profile_path = os.path.abspath("./chrome_profile")
+
+        self.context = await playwright.chromium.launch_persistent_context(
+            user_data_dir=profile_path,
+            channel="chrome",
+            headless=False,
+            viewport=None,
+            locale="en-US",
+            user_agent=(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36"
+            ),
+            args=[
+                "--start-maximized",
+                "--disable-blink-features=AutomationControlled",
+                "--no-sandbox",
+            ],
         )
 
-        self.context = await self.browser.new_context(
-            viewport={
-                "width": self.config.viewport_width,
-                "height": self.config.viewport_height
-            },
-            user_agent=self.config.user_agent,
-            locale=self.config.locale,
-        )
+        # Use existing tab or create new one
+        pages = self.context.pages
 
-        # Anti-detection scripts
-        await self.context.add_init_script("""
-            // Hide webdriver property
+        if pages:
+            self.page = pages[0]
+        else:
+            self.page = await self.context.new_page()
+
+        # Additional anti-detection JS
+        await self.page.add_init_script("""
+            // Remove webdriver
             Object.defineProperty(navigator, 'webdriver', {
                 get: () => undefined
             });
 
-            // Override chrome.runtime
-            window.chrome = { runtime: {} };
-
-            // Override permissions query
-            const originalQuery = window.navigator.permissions.query;
-            window.navigator.permissions.query = (parameters) => (
-                parameters.name === 'notifications' ?
-                    Promise.resolve({ state: Notification.permission }) :
-                    originalQuery(parameters)
-            );
-
-            // WebGL fingerprint spoofing
-            const getParameter = WebGLRenderingContext.prototype.getParameter;
-            WebGLRenderingContext.prototype.getParameter = function(parameter) {
-                if (parameter === 37445) return 'Intel Inc.';
-                if (parameter === 37446) return 'Intel Iris OpenGL Engine';
-                return getParameter.call(this, parameter);
+            // Fake chrome runtime
+            window.chrome = {
+                runtime: {}
             };
+
+            // Fake plugins
+            Object.defineProperty(navigator, 'plugins', {
+                get: () => [1, 2, 3, 4, 5],
+            });
+
+            // Fake languages
+            Object.defineProperty(navigator, 'languages', {
+                get: () => ['en-US', 'en'],
+            });
+
+            // Permissions fix
+            const originalQuery = window.navigator.permissions.query;
+
+            window.navigator.permissions.query = (parameters) => (
+                parameters.name === 'notifications'
+                    ? Promise.resolve({ state: Notification.permission })
+                    : originalQuery(parameters)
+            );
         """)
 
-        self.page = await self.context.new_page()
+        # Small human-like delay
+        await asyncio.sleep(2)
 
-        return self.browser, self.context, self.page
+        return None, self.context, self.page
 
     async def close(self) -> None:
-        """Close browser and cleanup."""
+        """Close browser context."""
         if self.context:
             await self.context.close()
-        if self.browser:
-            await self.browser.close()
 
 
 # =============================================================================
@@ -742,7 +356,15 @@ async def run_scenario(scenario: TaskScenario) -> dict:
 
         logger.info(f"Opening {scenario.url}")
         try:
-            await page.goto(scenario.url, timeout=60000, wait_until="domcontentloaded")
+            await page.goto(
+                scenario.url,
+                timeout=60000,
+                wait_until="networkidle"
+            )
+            # Wait like a human
+            await human_delay(3, 5)
+            # Extra wait for Cloudflare verification to complete
+            await asyncio.sleep(10)
         except Exception as e:
             logger.warning(f"Initial navigation timeout/error: {e}")
 

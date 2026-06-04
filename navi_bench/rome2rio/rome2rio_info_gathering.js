@@ -1,23 +1,16 @@
 () => {
   const results = [];
 
-  // DEBUG: Log page info
-  console.log('[DEBUG JS] ============ SCRAPER START ============');
-  console.log('[DEBUG JS] Page URL:', window.location.href);
-  console.log('[DEBUG JS] Page Title:', document.title);
-
   const detectPageCurrency = () => {
     const headerCurrency = document.querySelector(
       '[data-testid="header-currency-picker-trigger"], [data-testid="currency-picker"]'
     );
     const headerText = headerCurrency ? headerCurrency.textContent || '' : '';
-    if (/\bINR\b/i.test(headerText) || /₹/.test(headerText)) return 'INR';
     if (/\bUSD\b/i.test(headerText) || /\$/.test(headerText)) return 'USD';
     if (/\bEUR\b/i.test(headerText) || /€/.test(headerText)) return 'EUR';
     if (/\bGBP\b/i.test(headerText) || /£/.test(headerText)) return 'GBP';
 
     const bodyText = document.body ? document.body.innerText || '' : '';
-    if (bodyText.includes('INR') || bodyText.includes('₹')) return 'INR';
     if (bodyText.includes('USD') || bodyText.includes('$')) return 'USD';
     if (bodyText.includes('EUR') || bodyText.includes('€')) return 'EUR';
     if (bodyText.includes('GBP') || bodyText.includes('£')) return 'GBP';
@@ -25,9 +18,6 @@
   };
 
   const pageCurrency = detectPageCurrency();
-  if (pageCurrency) {
-    console.log('[DEBUG JS] Detected page currency:', pageCurrency);
-  }
 
   const extractDecimalInRange = (text, min = 1, max = 10) => {
     if (!text) return null;
@@ -102,7 +92,7 @@
         };
       }
     } catch (e) {
-      console.warn('[DEBUG JS] Failed to parse route from URL:', e);
+      // Silently continue if URL parsing fails
     }
     return { origin: null, destination: null };
   })();
@@ -126,7 +116,6 @@
         .trim();
       return normalized || null;
     } catch (e) {
-      console.warn('[DEBUG JS] Failed to parse route query:', e);
       return null;
     }
   })();
@@ -142,21 +131,24 @@
       parts.push(routeFromQuery);
     }
 
+    // Extract airport names and codes directly from card
     const cardText = card?.innerText || '';
     const lines = cardText
       .split('\n')
       .map((line) => line.trim())
       .filter(Boolean);
 
-    const airportCandidates = lines.filter((line) => {
-      if (/airport/i.test(line)) return true;
-      if (/\b[A-Z]{3}\b/.test(line) && / - /.test(line)) return true;
-      return false;
-    });
+    // Find lines that look like airports (contain "airport" or airport codes)
+    const airportLines = [];
+    for (const line of lines) {
+      // Match lines like "London Stansted Airport - STN" or "Dubai International - DXB"
+      if (/airport/i.test(line) || /\b[A-Z]{3}\b/.test(line)) {
+        airportLines.push(line);
+      }
+    }
 
-    const uniqueAirports = [...new Set(airportCandidates)];
-    if (uniqueAirports.length > 0) {
-      parts.push(...uniqueAirports);
+    if (airportLines.length > 0) {
+      parts.push(...airportLines);
     }
 
     const text = parts.filter(Boolean).join(' | ');
@@ -169,7 +161,6 @@
   const routeCards = document.querySelectorAll(
     '[data-testid^="trip-search-result"]'
   );
-  console.log('[DEBUG JS] Route cards found:', routeCards.length);
   routeCards.forEach((card) => {
     try {
       const titleEl = card.querySelector('h1');
@@ -223,7 +214,6 @@
   const scheduleCards = document.querySelectorAll(
     '[aria-labelledby^="schedule-cell-times-"]'
   );
-  console.log('[DEBUG JS] Schedule cards found:', scheduleCards.length);
   scheduleCards.forEach((card) => {
     try {
       const airlineImgs = card.querySelectorAll('img[alt]');
@@ -287,15 +277,9 @@
   // ==========================================
   // 3. HOTEL CARDS (The accommodations page)
   // ==========================================
-  console.log('[DEBUG JS] === HOTEL CARDS SECTION ===');
 
   // OLD LOGIC: Try original Rome2Rio selector first
   let hotelCards = document.querySelectorAll('[data-testid="hotel-list-item"]');
-  console.log(
-    '[DEBUG JS] Old selector \'[data-testid="hotel-list-item"]\' found:',
-    hotelCards.length,
-    'cards'
-  );
 
   hotelCards.forEach((card) => {
     try {
@@ -343,8 +327,7 @@
           }
         }
 
-        if (/\bINR\b|₹/i.test(text)) currency = 'INR';
-        else if (/\bUSD\b|\$/i.test(text)) currency = 'USD';
+        if (/\bUSD\b|\$/i.test(text)) currency = 'USD';
         else if (/€/i.test(text)) currency = 'EUR';
         else if (/£/i.test(text)) currency = 'GBP';
       }
@@ -485,16 +468,6 @@
         }
       }
 
-      console.log(
-        '[DEBUG JS] OLD LOGIC Hotel found:',
-        name,
-        '| Stars:',
-        stars,
-        '| Price:',
-        min_price,
-        '| Score:',
-        score
-      );
       if (!currency && pageCurrency) currency = pageCurrency;
 
       results.push({
@@ -514,34 +487,26 @@
   });
 
   // NEW LOGIC: If old selector found nothing, try newer Booking.com structure
-  if (hotelCards.length === 0) {
-    console.log('[DEBUG JS] OLD LOGIC found 0 results, trying NEW LOGIC...');
+  // Only run heuristic hotel detection on hotel/accommodation pages (not routes/schedules)
+  const isHotelPage = /hotel|accommodation|booking|stay/i.test(document.title) || /hotel|accommodation|booking/i.test(window.location.href);
 
+  if (hotelCards.length === 0 && isHotelPage) {
     let newHotelCards = document.querySelectorAll(
       'div[data-testid*="property-card"], article[data-testid*="property"], div[class*="PropertyCard"], div[class*="Hotel-card"]'
-    );
-    console.log(
-      '[DEBUG JS] NEW selector attempt 1 found:',
-      newHotelCards.length,
-      'cards'
     );
 
     // If still no results, try finding hotel items by searching for elements with property images and text
     if (newHotelCards.length === 0) {
-      console.log(
-        '[DEBUG JS] Attempt 1 failed, trying fallback pattern matching...'
-      );
       const potentialCards = document.querySelectorAll(
         'div[role="region"], article, div[class*="card"]'
       );
-      console.log('[DEBUG JS] Found potential cards:', potentialCards.length);
       const filteredCards = [];
       potentialCards.forEach((card) => {
         const text = card.textContent || '';
-        // If the card contains hotel-like info: name, stars or rating, price info
+        // If the card contains hotel-like info: stars/ratings, price, image, and interaction elements
+        // Require BOTH star ratings AND numbers to reduce false positives
         if (
-          (text.match(/★|star/i) ||
-            text.match(/exceptional|very good|good|fabulous/i)) &&
+          text.match(/★|star/i) &&
           text.match(/[\d,]+/) &&
           card.querySelector('img') &&
           card.querySelectorAll('button, a').length > 0
@@ -549,17 +514,8 @@
           filteredCards.push(card);
         }
       });
-      console.log(
-        '[DEBUG JS] Filtered cards (after pattern matching):',
-        filteredCards.length
-      );
       if (filteredCards.length > 0) newHotelCards = filteredCards;
     }
-
-    console.log(
-      '[DEBUG JS] FINAL newHotelCards to process:',
-      newHotelCards.length
-    );
 
     newHotelCards.forEach((card) => {
       try {
@@ -586,11 +542,8 @@
 
         // If still no name, skip this card
         if (!name) {
-          console.log('[DEBUG JS] NEW LOGIC: Card skipped - no name found');
           return;
         }
-
-        console.log('[DEBUG JS] NEW LOGIC: Processing hotel:', name);
 
         // Extract stars - try multiple methods
         let stars = null;
@@ -679,8 +632,7 @@
             }
           }
 
-          if (/\bINR\b|₹/i.test(text)) currency = 'INR';
-          else if (/\bUSD\b|\$/i.test(text)) currency = 'USD';
+          if (/\bUSD\b|\$/i.test(text)) currency = 'USD';
           else if (/€/i.test(text)) currency = 'EUR';
           else if (/£/i.test(text)) currency = 'GBP';
         }
@@ -690,7 +642,6 @@
           const cardText = card.textContent || '';
           const currencyPatterns = [
             { code: 'USD', regex: /USD\s*[\d,]+/gi },
-            { code: 'INR', regex: /₹\s*[\d,]+/gi },
             { code: 'EUR', regex: /€\s*[\d,]+/gi },
             { code: 'GBP', regex: /£\s*[\d,]+/gi },
             { code: 'USD', regex: /\$\s*[\d,]+/gi },
@@ -790,16 +741,6 @@
 
         // Only add if we found at least a name
         if (name) {
-          console.log(
-            '[DEBUG JS] NEW LOGIC Hotel pushed:',
-            name,
-            '| Stars:',
-            stars,
-            '| Price:',
-            min_price,
-            '| Score:',
-            score
-          );
           results.push({
             mode: 'Hotel',
             name,
@@ -918,7 +859,7 @@
           ? Array.from(new Set(modeParts)).join(', ')
           : 'multi-leg';
 
-      // Extract duration from time elements first, then fallback to text regex.
+      // Extract duration from time elements. Collect all durations and use the longest (total trip).
       let duration = null;
       const timeEls = document.querySelectorAll('time[datetime]');
       const durations = [];
@@ -933,10 +874,9 @@
           if (mins > 0) durations.push(mins);
         }
       });
+      if (durations.length > 0) duration = Math.max(...durations);
 
-      if (durations.length > 0) {
-        duration = Math.max(...durations);
-      } else {
+      if (!duration) {
         const durationMatches = [
           ...bodyText.matchAll(/(\d+)\s*h\s*(\d+)\s*m/gi),
         ];
@@ -949,16 +889,6 @@
       // Extract price range if present (optional for matching).
       let min_price_total = null;
       let max_price_total = null;
-      const priceMatches = [...bodyText.matchAll(/₹\s*([\d,]+)/g)];
-      if (priceMatches.length > 0) {
-        const values = priceMatches
-          .map((m) => parseInt(m[1].replace(/,/g, ''), 10))
-          .filter((v) => !isNaN(v));
-        if (values.length > 0) {
-          min_price_total = Math.min(...values);
-          max_price_total = Math.max(...values);
-        }
-      }
 
       if (duration !== null || min_price_total !== null) {
         results.push({
@@ -971,11 +901,8 @@
       }
     }
   } catch (e) {
-    console.error('[DEBUG JS] Error parsing trip details:', e);
+    // Error parsing trip details, continue
   }
 
-  console.log('[DEBUG JS] ============ SCRAPER END ============');
-  console.log('[DEBUG JS] TOTAL RESULTS COLLECTED:', results.length);
-  console.log('[DEBUG JS] Results data:', JSON.stringify(results, null, 2));
   return results;
 };

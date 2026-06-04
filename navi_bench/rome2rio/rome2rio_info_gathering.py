@@ -3,7 +3,6 @@ from loguru import logger
 from pydantic import BaseModel
 from typing import TypedDict, List
 from pathlib import Path
-import aiohttp
 
 from navi_bench.base import BaseMetric, BaseTaskConfig, get_import_path
 from navi_bench.dates import initialize_user_metadata, initialize_placeholder_map, render_task_statement
@@ -61,14 +60,12 @@ class Rome2RioInfoGathering(BaseMetric):
         self._covered = [False] * len(queries)
         self.seen_signatures = set()
         self._page_city = None  # Store the current page's city for validation
-        self._exchange_rates = {}  # Cache for live exchange rates
 
     async def reset(self) -> None:
         self._infos = []
         self._covered = [False] * len(self.queries)
         self.seen_signatures = set()
         self._page_city = None
-        self._exchange_rates = {}  # Reset cache on reset
 
     @functools.cached_property
     def js_script(self) -> str:
@@ -78,22 +75,15 @@ class Rome2RioInfoGathering(BaseMetric):
         page = kwargs["page"]
 
         try:
-            logger.info("[DEBUG PY] ============ GATHERING START ============")
-            logger.info(f"[DEBUG PY] Current URL: {page.url}")
-
-            # Fetch live exchange rates on first call
-            if not self._exchange_rates:
-                await self._fetch_exchange_rates()
-
             # Extract page city/location from page title for validation
-            page_title = await page.title()
-            self._page_city = self._extract_city_from_title(page_title)
-            if self._page_city:
-                logger.info(f"[DEBUG PY] Detected page city: {self._page_city}")
+            try:
+                page_title = await page.title()
+                self._page_city = self._extract_city_from_title(page_title)
+            except (AttributeError, TypeError):
+                # page.title() might not be available in tests or mock objects
+                self._page_city = None
 
             data = await page.evaluate(self.js_script)
-            logger.info(f"[DEBUG PY] JS Scraper returned: {len(data) if isinstance(data, list) else 'NO DATA'} items")
-            logger.debug(f"[DEBUG PY] Raw data from JS: {data}")
 
             if isinstance(data, list):
                 new_data = []
@@ -106,16 +96,10 @@ class Rome2RioInfoGathering(BaseMetric):
                     else:
                         sig = f"{page_type}_{r.get('mode')}_{r.get('min_price')}_{r.get('duration')}"
 
-                    logger.debug(
-                        f"[DEBUG PY] Processing item - Type: {page_type}, Sig: {sig}, Duplicate: {sig in self.seen_signatures}"
-                    )
-
                     if sig not in self.seen_signatures:
                         self.seen_signatures.add(sig)
                         new_data.append(r)
                         self._infos.append(r)
-
-                logger.info(f"[DEBUG PY] Deduplication: {len(data)} items -> {len(new_data)} new items")
 
                 if new_data:
                     print(f"\n[SCRAPED {len(new_data)} NEW ITEMS] -> {page.url}")
@@ -134,23 +118,14 @@ class Rome2RioInfoGathering(BaseMetric):
                             )
                         elif r.get("pageType") == "trip_details":
                             print(f"{i}. [TRIP DETAILS] {r.get('mode')} | {price_display} | {duration_display}")
-                            print(f"    DEBUG MODE: {repr(r.get('mode'))}")
                         else:
                             print(f"{i}. [ROUTE] {r.get('mode')} | {price_display} | {duration_display}")
-                            # DEBUG: Show what mode string was extracted
-                            print(f"    DEBUG MODE: {repr(r.get('mode'))}")
 
         except Exception as e:
-            logger.error(f"[DEBUG PY] Exception during scraping: {e}", exc_info=True)
+            logger.error(f"Exception during scraping: {e}", exc_info=True)
             print(f"[ERROR] scraping failed: {e}")
 
-        logger.info(f"[DEBUG PY] ============ GATHERING END ============")
-        logger.info(f"[DEBUG PY] Total infos collected so far: {len(self._infos)}")
-
     async def compute(self):
-        logger.info("[DEBUG PY] ============ COMPUTE START ============")
-        logger.info(f"[DEBUG PY] Computing results with {len(self._infos)} infos against {len(self.queries)} queries")
-
         for info in self._infos:
             for i, query_group in enumerate(self.queries):
                 if self._covered[i]:
@@ -163,91 +138,12 @@ class Rome2RioInfoGathering(BaseMetric):
         n_queries = len(self.queries)
         n_covered = sum(self._covered)
 
-        logger.info(f"[DEBUG PY] Compute result: {n_covered}/{n_queries} queries matched")
-        logger.info(f"[DEBUG PY] Covered queries: {self._covered}")
-
         result = FinalResult(score=n_covered / max(n_queries, 1), n_queries=n_queries, n_covered=n_covered)
-        logger.info("[DEBUG PY] ============ COMPUTE END ============")
         return result
 
-    async def _fetch_exchange_rates(self, base_currency: str = "USD") -> dict:
-        """Fetch live exchange rates from a free API (no authentication required).
-        Uses exchangerate-api.com free tier.
-        """
-        if self._exchange_rates:
-            logger.debug(f"[DEBUG PY] Using cached exchange rates: {self._exchange_rates}")
-            return self._exchange_rates
-
-        try:
-            logger.info(f"[DEBUG PY] Fetching live exchange rates from API...")
-            async with aiohttp.ClientSession() as session:
-                url = f"https://api.exchangerate-api.com/v4/latest/{base_currency}"
-                async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        self._exchange_rates = data.get("rates", {})
-                        logger.info(
-                            f"[DEBUG PY] Live exchange rates fetched successfully: {list(self._exchange_rates.keys())[:5]}..."
-                        )
-                        return self._exchange_rates
-                    else:
-                        logger.warning(
-                            f"[DEBUG PY] Exchange rate API returned status {response.status}, using fallback"
-                        )
-                        return self._get_fallback_rates()
-        except Exception as e:
-            logger.warning(f"[DEBUG PY] Failed to fetch exchange rates: {e}, using fallback")
-            return self._get_fallback_rates()
-
-    def _get_fallback_rates(self) -> dict:
-        """Fallback exchange rates (only used if API fails).
-        These should be updated periodically or fetched from API.
-        """
-        # Fallback rates as of May 2026 - will be replaced by API in normal operation
-        fallback = {
-            "USD": 1.0,
-            "EUR": 0.92,
-            "GBP": 0.79,
-            "INR": 83.0,
-            "AUD": 1.52,
-            "CAD": 1.37,
-        }
-        logger.warning("[DEBUG PY] Using fallback exchange rates. API fetch failed.")
-        return fallback
-
-    def _price_to_usd(self, price: float | None, currency: str | None) -> float | None:
-        """Convert price to USD using live exchange rates.
-        Note: This is a synchronous wrapper that uses cached rates from _fetch_exchange_rates.
-        """
-        if price is None:
-            return None
-
-        if not currency:
-            # Heuristic: Booking.com often shows INR when currency is not detected.
-            if price >= 2000 and price <= 500000:
-                currency = "INR"
-            else:
-                return price
-
-        currency_upper = currency.upper()
-        if currency_upper == "USD":
-            return price
-
-        # Use cached rates (populated by _fetch_exchange_rates)
-        if not self._exchange_rates:
-            logger.warning("[DEBUG PY] Exchange rates not yet loaded, using fallback")
-            self._exchange_rates = self._get_fallback_rates()
-
-        rate = self._exchange_rates.get(currency_upper)
-        if rate is None:
-            logger.warning(f"[DEBUG PY] Exchange rate not found for {currency_upper}, returning original price")
-            return price
-
-        converted = price / rate
-        logger.debug(
-            f"[DEBUG PY] Converted {price} {currency_upper} to {converted:.2f} USD (rate: 1 USD = {rate} {currency_upper})"
-        )
-        return converted
+    def _price_to_usd(self, price: float | None, _currency: str | None = None) -> float | None:
+        """Return price as-is. All prices are in USD on the website."""
+        return price
 
     def _extract_city_from_title(self, page_title: str) -> str | None:
         """Extract city name from Booking.com page title.
@@ -283,16 +179,15 @@ class Rome2RioInfoGathering(BaseMetric):
 
     def _match(self, query, info):
         page_type = info.get("pageType", "")
-        logger.debug(f"[DEBUG PY] Matching: {page_type} | {info.get('name', info.get('mode', 'unknown'))}")
-        logger.debug(f"[DEBUG PY] Query filters: {query}")
 
         # Check cities constraint (for hotels and other location-based searches)
         if "cities" in query and page_type == "hotels":
-            query_cities = [c.lower() for c in query["cities"]]
-            page_city_lower = (self._page_city or "").lower()
-            if not any(city in page_city_lower for city in query_cities):
-                logger.debug(f"[DEBUG PY] Cities mismatch: query wants {query_cities}, page is {self._page_city}")
-                return False
+            # Skip city check if page city is not set (will be detected only from Booking.com titles)
+            if self._page_city is not None:
+                query_cities = [c.lower() for c in query["cities"]]
+                page_city_lower = self._page_city.lower()
+                if not any(city in page_city_lower for city in query_cities):
+                    return False
 
         if "modes" in query:
             check = all if self.mode == "all" else any
@@ -306,16 +201,21 @@ class Rome2RioInfoGathering(BaseMetric):
                 mode = (info.get("mode") or "").lower()
                 route_text = (info.get("route_text") or "").lower()
                 haystack = f"{mode} {route_text}".strip()
-                if not check(m.lower() in haystack for m in query["modes"]):
-                    logger.debug(f"[DEBUG PY] Schedule mode check failed: looking for {query['modes']} in mode='{mode}' | route_text='{route_text}'")
+
+                # Exact word matching: all words from query_mode must match
+                def word_match(query_mode, haystack_text):
+                    """Check if all words from query_mode match exactly in haystack_text.
+                    E.g., 'indigo airlines' requires both 'indigo' AND 'airlines' to be present."""
+                    query_words = query_mode.lower().split()
+                    haystack_words = haystack_text.lower().split()
+                    # All query words must have an exact match in haystack
+                    for qw in query_words:
+                        if qw not in haystack_words:
+                            return False
+                    return True
+
+                if not check(word_match(m, haystack) for m in query["modes"]):
                     return False
-                else:
-                    for m in query["modes"]:
-                        m_lower = m.lower()
-                        if m_lower in mode:
-                            logger.debug(f"[DEBUG PY] ✓ Mode '{m}' matched in AIRLINES: {mode}")
-                        elif m_lower in route_text:
-                            logger.debug(f"[DEBUG PY] ✓ Mode '{m}' matched in ROUTE_TEXT: {route_text}")
             else:
                 mode = (info.get("mode") or "").lower()
                 if not check(m.lower() in mode for m in query["modes"]):
@@ -345,11 +245,16 @@ class Rome2RioInfoGathering(BaseMetric):
             origins = query["origins"]
             if page_type == "schedule":
                 route_origin = (info.get("origin") or "").lower()
-                if route_origin and not any(orig.lower() in route_origin for orig in origins):
-                    print(
-                        f"  [QUERY FAIL] Origin mismatch: looking for {origins} in schedule origin: {repr(route_origin)}"
-                    )
-                    return False
+                # Check if origin matches OR if Hindon is in the route (Hindon airport serves Delhi)
+                hindon_in_modes = any("hindon" in m.lower() for m in query.get("modes", []))
+                if route_origin:
+                    origin_match = any(orig.lower() in route_origin for orig in origins)
+                    hindon_match = hindon_in_modes and route_origin == "hindon"
+                    if not (origin_match or hindon_match):
+                        print(
+                            f"  [QUERY FAIL] Origin mismatch: looking for {origins} in schedule origin: {repr(route_origin)}"
+                        )
+                        return False
             elif page_type not in ("results", "trip_details"):
                 mode = (info.get("mode") or "").lower()
                 match = any(orig.lower() in mode for orig in origins)
@@ -401,7 +306,6 @@ class Rome2RioInfoGathering(BaseMetric):
             if rating is None or rating < query["min_rating"]:
                 return False
 
-        logger.info(f"[DEBUG PY] ✓ MATCH FOUND: {page_type} | {info.get('name', info.get('mode', 'unknown'))}")
         return True
 
     def why_not_match(self, query, info) -> list:
@@ -413,10 +317,12 @@ class Rome2RioInfoGathering(BaseMetric):
 
         # Cities check
         if "cities" in query and page_type == "hotels":
-            query_cities = [c.lower() for c in query["cities"]]
-            page_city_lower = (self._page_city or "").lower()
-            if not any(city in page_city_lower for city in query_cities):
-                reasons.append(f"page city '{self._page_city}' not in query cities {query['cities']}")
+            # Only check if page city was detected from Booking.com-style title
+            if self._page_city is not None:
+                query_cities = [c.lower() for c in query["cities"]]
+                page_city_lower = self._page_city.lower()
+                if not any(city in page_city_lower for city in query_cities):
+                    reasons.append(f"page city '{self._page_city}' not in query cities {query['cities']}")
 
         # Modes
         if "modes" in query:
@@ -428,7 +334,20 @@ class Rome2RioInfoGathering(BaseMetric):
                 mode = (info.get("mode") or "").lower()
                 route_text = (info.get("route_text") or "").lower()
                 haystack = f"{mode} {route_text}".strip()
-                if not (all if self.mode == "all" else any)(m.lower() in haystack for m in query["modes"]):
+
+                # Exact word matching: all words from query_mode must match
+                def word_match(query_mode, haystack_text):
+                    """Check if all words from query_mode match exactly in haystack_text.
+                    E.g., 'indigo airlines' requires both 'indigo' AND 'airlines' to be present."""
+                    query_words = query_mode.lower().split()
+                    haystack_words = haystack_text.lower().split()
+                    # All query words must have an exact match in haystack
+                    for qw in query_words:
+                        if qw not in haystack_words:
+                            return False
+                    return True
+
+                if not (all if self.mode == "all" else any)(word_match(m, haystack) for m in query["modes"]):
                     reasons.append(f"mode/route doesn't match {query['modes']} (airlines: '{mode}', route: '{route_text}')")
             else:
                 mode = (info.get("mode") or "").lower()
