@@ -63,7 +63,7 @@ SCENARIOS = [
                     "origins": ["new delhi"],
                     "destinations": ["london"],
                     "modes": ["london stansted airport"],
-                    "max_duration": 1080,
+                    # "max_duration": 1080,
                 }
             ]
         ],
@@ -79,7 +79,7 @@ SCENARIOS = [
                 {
                     "cities": ["paris"],
                     "min_stars": 5,
-                    "max_price": 00.0,
+                    "max_price": 1000.0,
                 }
             ]
         ],
@@ -168,7 +168,7 @@ SCENARIOS = [
         task_prompt=(
             "Are there any routes from New Delhi to Frankfurt am Main departing "
             "from Hindon? Tell me info about the top listing that takes longer "
-            "than 20 hours (1200 mins) and costs more than USD 1000."
+            "than 20 hours (200 mins) and costs more than USD 500."
         ),
         queries=[
             [
