@@ -97,7 +97,6 @@ PRODUCT_PREFIXES = {
 # =====================================================================
 # VERIFIER
 # =====================================================================
-
 @beartype
 class GoatUrlMatch(BaseMetric):
 
@@ -113,15 +112,12 @@ class GoatUrlMatch(BaseMetric):
         else:
             self.gt_urls = gt_url
 
-        self._found_match = False
         self._agent_url = ""
         self._matched_gt_url = ""
         self._last_gt_url = ""
         self._match_details: dict = {}
 
     async def reset(self) -> None:
-
-        self._found_match = False
         self._agent_url = ""
         self._matched_gt_url = ""
         self._last_gt_url = ""
@@ -130,85 +126,120 @@ class GoatUrlMatch(BaseMetric):
     async def update(self, **kwargs) -> None:
 
         inputs: InputDict = kwargs
-
         url = inputs.get("url", "")
 
         if not url:
             return
 
         parsed = urlparse(url.strip())
-
         domain = (parsed.hostname or "").lower()
 
         if not domain.endswith("goat.com"):
-
-            logger.debug(
-                f"Ignoring non-goat URL: {url}"
-            )
-
+            logger.debug(f"Ignoring non-goat URL: {url}")
             return
 
-        if self._found_match:
-            return
-
+        # ALWAYS track latest URL (IMPORTANT FIX)
         self._agent_url = url
 
         for gt_url in self.gt_urls:
 
             self._last_gt_url = gt_url
 
-            match, details = self._urls_match(
-                url,
-                gt_url,
-            )
+            match, details = self._urls_match(url, gt_url)
 
             if match:
-
-                self._found_match = True
                 self._matched_gt_url = gt_url
                 self._match_details = details
-
-                return
-
-            self._match_details = details
-
-    def __repr__(self) -> str:
-
-        return (
-            f"{self.__class__.__name__}"
-            f"(gt_urls={self.gt_urls})"
-        )
+            else:
+                # keep last mismatch details for debugging
+                self._match_details = details
 
     async def compute(self) -> FinalResult:
-
+        final_valid, _ = self._validate_final_url(self._agent_url)
         return FinalResult(
-            score=1.0 if self._found_match else 0.0
+            score=1.0 if (self._matched_gt_url and final_valid) else 0.0
         )
 
-    async def compute_detailed(
-        self,
-    ) -> GoatVerifierResult:
+    async def compute_detailed(self) -> GoatVerifierResult:
+
+        final_valid, final_errors = self._validate_final_url(self._agent_url)
+
+        all_mismatches = list(self._match_details.get("mismatches", []))
+
+        if final_errors:
+            all_mismatches.extend(final_errors)
+
+        is_pass = bool(self._matched_gt_url) and final_valid
 
         return GoatVerifierResult(
-            score=1.0 if self._found_match else 0.0,
-            match=self._found_match,
+            score=1.0 if is_pass else 0.0,
+            match=is_pass,
             agent_url=self._agent_url,
             gt_url=self._matched_gt_url or self._last_gt_url,
-            details=self._match_details,
+            details={"mismatches": all_mismatches},
         )
 
-# =====================================================================
-# URL MATCH
-# =====================================================================
+    # =========================================================
+    # FINAL URL VALIDATION (NEW CORE RULE)
+    # =========================================================
 
-    def _urls_match(
-        self,
-        agent_url: str,
-        gt_url: str,
-    ) -> tuple[bool, dict]:
+    def _validate_final_url(self, final_url: str) -> tuple[bool, list[str]]:
+
+        parsed = self._parse_url(final_url)
+
+        errors = []
+
+        # Build allowed filter map from ALL GTs
+        allowed_filters = {}
+
+        for gt_url in self.gt_urls:
+            gt = self._parse_url(gt_url)
+
+            for k, v in gt.items():
+                if k in ["page_type"]:
+                    continue
+                if v not in [None, "", set(), []]:
+                    allowed_filters[k] = v
+
+        # sort is always allowed
+        allowed_filters["sort_type"] = "ALLOWED"
+
+        # Check for illegal extra filters
+        for key, value in parsed.items():
+
+            if key in ["page_type"]:
+                continue
+
+            # ignore empty values
+            if value in [None, "", set(), []]:
+                continue
+
+            # allow sort always
+            if key == "sort_type":
+                continue
+
+            # MUST exist in at least one GT
+            supported = False
+
+            for gt_url in self.gt_urls:
+                gt = self._parse_url(gt_url)
+
+                if key in gt and gt[key] not in [None, "", set(), []]:
+                    supported = True
+                    break
+
+            if not supported:
+                errors.append(f"extra filter not allowed: {key}")
+
+        return (len(errors) == 0), errors
+
+    # =========================================================
+    # EXISTING LOGIC (UNCHANGED BUT SAFE)
+    # =========================================================
+
+    def _urls_match(self, agent_url: str, gt_url: str) -> tuple[bool, dict]:
 
         try:
-
             agent = self._parse_url(agent_url)
             gt = self._parse_url(gt_url)
 
@@ -216,44 +247,24 @@ class GoatUrlMatch(BaseMetric):
 
             # PAGE TYPE
             if agent["page_type"] != gt["page_type"]:
-
                 mismatches.append(
-                    f"page_type mismatch: "
-                    f"{agent['page_type']} "
-                    f"vs "
-                    f"{gt['page_type']}"
+                    f"page_type mismatch: {agent['page_type']} vs {gt['page_type']}"
                 )
 
             # PAGE IDENTITY
-            mismatches.extend(
-                self._match_page_identity(
-                    agent,
-                    gt,
-                )
-            )
+            mismatches.extend(self._match_page_identity(agent, gt))
 
             # FILTERS
-            mismatches.extend(
-                self._match_filters(
-                    agent,
-                    gt,
-                )
-            )
+            mismatches.extend(self._match_filters(agent, gt))
 
             if mismatches:
-                return False, {
-                    "mismatches": mismatches
-                }
+                return False, {"mismatches": mismatches}
 
             return True, {}
 
         except Exception as e:
-
             logger.error(e)
-
-            return False, {
-                "mismatches": [str(e)]
-            }
+            return False, {"mismatches": [str(e)]}
 
 # =====================================================================
 # PAGE TYPE DETECTION
@@ -638,6 +649,53 @@ class GoatUrlMatch(BaseMetric):
                     f"{agent_val} "
                     f"vs "
                     f"{gt_val}"
+                )
+        
+        # ---------------------------------------------------
+        # DISALLOW EXTRA FILTERS
+        # (except sorting)
+        # ---------------------------------------------------
+
+        # Multi-value filters
+        for key in MULTI_VALUE_FILTERS:
+
+            gt_vals = gt.get(key, set())
+            agent_vals = agent.get(key, set())
+
+            if not gt_vals and agent_vals:
+
+                mismatches.append(
+                    f"extra {key} filter: {agent_vals}"
+                )
+
+        # Boolean filters
+        for key in BOOLEAN_FILTERS:
+
+            gt_val = gt.get(key)
+            agent_val = agent.get(key)
+
+            if (
+                gt_val is None
+                and agent_val is not None
+            ):
+
+                mismatches.append(
+                    f"extra {key} filter: {agent_val}"
+                )
+
+        # Numeric filters
+        for key in NUMERIC_FILTERS:
+
+            gt_val = gt.get(key)
+            agent_val = agent.get(key)
+
+            if (
+                gt_val is None
+                and agent_val is not None
+            ):
+
+                mismatches.append(
+                    f"extra {key} filter: {agent_val}"
                 )
 
         return mismatches
