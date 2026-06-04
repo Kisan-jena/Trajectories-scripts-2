@@ -766,7 +766,228 @@ SCENARIOS: list[TaskScenario] = [
         ],
         location="United States",
         timezone="America/Chicago",
-    )
+    ),
+    TaskScenario(
+        task_id="goat/brands/nike_socks/19",
+        name="Browse In-Stock White Nike Socks",
+        task=(
+            "I am looking to buy a new pair of socks. Navigate to nike brand, "
+            "and browse for socks that are available now and are white colored."
+        ),
+        url="https://www.goat.com/",
+        gt_url=[
+            (
+                "https://www.goat.com/search"
+                "?query=socks"
+                "&pageNumber=1"
+                "&colors=white"
+                "&inStock=true"
+                "&brands=Nike"
+            ),
+            (
+                "https://www.goat.com/brand/nike"
+                "?slug=nike"
+                "&inStock=true"
+                "&pageNumber=1"
+                "&colors=white"
+            ),
+            (
+                "https://www.goat.com/search"
+                "?pageNumber=1"
+                "&brands=Nike"
+                "&categories=Accessories"
+                "&types=%2CSocks+and+Tights"
+                "&inStock=true"
+                "&colors=white"
+            ),
+        ],
+        location="United States",
+        timezone="America/Chicago",
+    ),
+    TaskScenario(
+        task_id="goat/collections/grade-school/1",
+        name="Browse In-Stock New Grade School Sneakers for Youth Sorted Low to High",
+        task=(
+            "I have been looking to find some fresh kicks for the new school term "
+            "that are ready to ship immediately without any defects. Navigate to "
+            "Grade School Sneakers and apply youth option in gender filter. I only "
+            "want to see brand new pairs in pristine condition that are currently "
+            "available now. Sort the results from lowest price to highest so I can "
+            "find the best deals on everyday staples first."
+        ),
+        url="https://www.goat.com/",
+        gt_url=[
+            (
+                "https://www.goat.com/collections/grade-school"
+                "?pageNumber=1"
+                "&conditions=new_no_defects"
+                "&sortType=price_low_high"
+                "&inStock=true"
+                "&slug=grade-school"
+                "&genders=youth"
+            ),
+            (
+                "https://www.goat.com/search"
+                "?query=Grade%20school%20sneakers"
+                "&pageNumber=1"
+                "&conditions=new_no_defects"
+                "&sortType=price_low_high"
+                "&inStock=true"
+                "&slug=grade-school"
+                "&genders=youth"
+            ),
+        ],
+        location="United States",
+        timezone="America/Chicago",
+    ),
+    TaskScenario(
+        task_id="goat/bags/duffles/1",
+        name="Browse In-Stock Used Duffle Bags Sorted High to Low",
+        task=(
+            "Browse the duffle bag, within the bags section under categories and "
+            "keep the results focused on pieces in used condition that are currently "
+            "available now. I'm most interested in premium designer styles, so "
+            "arrange everything from highest price to lowest to help me explore "
+            "the most exclusive and elevated options first."
+        ),
+        url="https://www.goat.com/",
+        gt_url=[
+            (
+                "https://www.goat.com/bags"
+                "?sortType=price_high_low"
+                "&pageNumber=1"
+                "&categories=Bags"
+                "&types=%2CDuffles"
+                "&conditions=used"
+                "&inStock=true"
+            ),
+            (
+                "https://www.goat.com/search"
+                "?query=duffle+bag"
+                "&pageNumber=1"
+                "&conditions=used"
+                "&inStock=true"
+                "&sortType=price_high_low"
+            ),
+            (
+                "https://www.goat.com/search"
+                "?pageNumber=1"
+                "&categories=Bags"
+                "&types=%2CDuffles"
+                "&sortType=price_high_low"
+                "&inStock=true"
+                "&conditions=used"
+            ),
+        ],
+        location="United States",
+        timezone="America/Chicago",
+    ),
+    TaskScenario(
+        task_id="goat/category/sneakers_instant/23",
+        name="Browse In-Stock Men's New Sneakers with Instant Shipping",
+        task=(
+            "Browse the sneakers category. Look for items for men, I want the "
+            "pieces to be in new condition and make sure they are on sale and "
+            "available now and has instant shipping enabled."
+        ),
+        url="https://www.goat.com/",
+        gt_url=[
+            (
+                "https://www.goat.com/sneakers"
+                "?pageNumber=1"
+                "&genders=men"
+                "&conditions=new_no_defects"
+                "&inStock=true"
+                "&instantShip=true"
+            ),
+            (
+                "https://www.goat.com/search"
+                "?query=sneakers"
+                "&pageNumber=1"
+                "&genders=men"
+                "&inStock=true"
+                "&sale=true"
+                "&instantShip=true"
+                "&conditions=new_no_defects"
+            ),
+        ],
+        location="United States",
+        timezone="America/Chicago",
+    ),
+    TaskScenario(
+        task_id="goat/brand/supreme/swimwear/1",
+        name="Browse New Supreme Swimwear with Instant Shipping Sorted High to Low",
+        task=(
+            "I have been looking to buy swimwear, but I'm only interested in items "
+            "that can be shipped out immediately. Navigate to the Supreme brand page "
+            "under Featured Brands and filter for swimwear within the apparel section. "
+            "I only want to see new conditioned pieces and specifically want to browse "
+            "Instant ship options to avoid any processing delays. Sort the results from "
+            "highest price to lowest so I can explore the most premium neck gaiters first."
+        ),
+        url="https://www.goat.com/",
+        gt_url=[
+            (
+                "https://www.goat.com/brand/supreme"
+                "?slug=supreme"
+                "&sortType=price_high_low"
+                "&pageNumber=1"
+                "&types=%2Cswimwear"
+                "&categories=apparel"
+                "&conditions=new_no_defects"
+                "&instantShip=true"
+            ),
+            (
+                "https://www.goat.com/search"
+                "?query=swimwear"
+                "&pageNumber=1"
+                "&sortType=price_high_low"
+                "&conditions=new_no_defects"
+                "&instantShip=true"
+                "&brands=Supreme"
+            ),
+            (
+                "https://www.goat.com/search"
+                "?pageNumber=1"
+                "&categories=Apparel"
+                "&types=%2CSwimwear"
+                "&sortType=price_high_low"
+                "&conditions=new_no_defects"
+                "&instantShip=true"
+            ),
+        ],
+        location="United States",
+        timezone="America/Chicago",
+    ),
+    TaskScenario(
+        task_id="goat/apparel/tshirts/women/1",
+        name="Browse Women's T-Shirts in Size S with White and Red Colors",
+        task=(
+            "Search for t-shirts and select gender as women make sure they are "
+            "women's top in size S. I'm drawn to a soft but vibrant color palette "
+            "with shades like white and red."
+        ),
+        url="https://www.goat.com/",
+        gt_url=[
+            (
+                "https://www.goat.com/apparel/tops/t-shirts"
+                "&pageNumber=1"
+                "&genders=women"
+                "&sizes=universal_tops_women_S"
+                "&colors=white%2Cred"
+            ),
+            (
+                "https://www.goat.com/search"
+                "?query=t-shirts"
+                "&pageNumber=1"
+                "&genders=women"
+                "&sizes=universal_tops_women_S"
+                "&colors=white%2Cred"
+            ),
+        ],
+        location="United States",
+        timezone="America/Chicago",
+    ),
 
 
 ]
