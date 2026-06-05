@@ -552,7 +552,7 @@ class TestMultiGT:
 
         assert result.score == 1.0
 
-    def test_first_match_sticks(self):
+    def test_latest_match_evaluated(self):
         gt1 = f"{BASE}/search?query=nike"
         gt2 = f"{BASE}/search?query=adidas"
 
@@ -565,7 +565,7 @@ class TestMultiGT:
             v.compute_detailed()
         )
 
-        assert result.gt_url == gt1
+        assert result.gt_url == gt2
 
 
 # ============================================================

@@ -185,6 +185,10 @@ class StockxUrlMatch(BaseMetric):
             gt = self._parse_search_url(gt_url)
 
             mismatches = []
+            
+            agent_path = urlparse(agent_url).path.lower()
+            if not agent_path.startswith("/search"):
+                mismatches.append(f"path mismatch: not on search page ({agent_path})")
 
             gt_tokens = self._normalize_query(gt.get("query", ""))
             agent_tokens = self._normalize_query(agent.get("query", ""))
@@ -427,18 +431,14 @@ class StockxUrlMatch(BaseMetric):
 
             decoded_key = self._decode_twice(key).lower().strip()
 
-            decoded_val = self._decode_twice(values[0]).lower()
-
-            parts = re.split(r"[|,]", decoded_val)
-
             clean_values = set()
-
-            for p in parts:
-                p = p.strip()
-                if not p:
-                    continue
-
-                clean_values.add(p)
+            for val in values:
+                decoded_val = self._decode_twice(val).lower()
+                parts = re.split(r"[|,]", decoded_val)
+                for p in parts:
+                    p = p.strip()
+                    if p:
+                        clean_values.add(p)
 
             if clean_values:
                 aspects[decoded_key] = clean_values
@@ -451,7 +451,7 @@ class StockxUrlMatch(BaseMetric):
     @staticmethod
     def _get_param(query: dict, key: str) -> str:
         if key in query and query[key]:
-            return query[key][0].strip()
+            return ",".join([v.strip() for v in query[key] if v.strip()])
         return ""
         
     @staticmethod
@@ -469,7 +469,9 @@ class StockxUrlMatch(BaseMetric):
             if len(parts) != 2:
                 return None, None
 
-            return float(parts[0]), float(parts[1])
+            min_price = float(parts[0]) if parts[0].strip() else None
+            max_price = float(parts[1]) if parts[1].strip() else None
+            return min_price, max_price
         except:
             return None, None
 

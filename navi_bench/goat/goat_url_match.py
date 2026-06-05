@@ -112,12 +112,14 @@ class GoatUrlMatch(BaseMetric):
         else:
             self.gt_urls = gt_url
 
+        self._found_match = False
         self._agent_url = ""
         self._matched_gt_url = ""
         self._last_gt_url = ""
         self._match_details: dict = {}
 
     async def reset(self) -> None:
+        self._found_match = False
         self._agent_url = ""
         self._matched_gt_url = ""
         self._last_gt_url = ""
@@ -140,6 +142,8 @@ class GoatUrlMatch(BaseMetric):
 
         # ALWAYS track latest URL (IMPORTANT FIX)
         self._agent_url = url
+        
+        self._matched_gt_url = ""
 
         for gt_url in self.gt_urls:
 
@@ -148,8 +152,10 @@ class GoatUrlMatch(BaseMetric):
             match, details = self._urls_match(url, gt_url)
 
             if match:
+                self._found_match = True
                 self._matched_gt_url = gt_url
                 self._match_details = details
+                return
             else:
                 # keep last mismatch details for debugging
                 self._match_details = details
@@ -650,54 +656,6 @@ class GoatUrlMatch(BaseMetric):
                     f"vs "
                     f"{gt_val}"
                 )
-        
-        # ---------------------------------------------------
-        # DISALLOW EXTRA FILTERS
-        # (except sorting)
-        # ---------------------------------------------------
-
-        # Multi-value filters
-        for key in MULTI_VALUE_FILTERS:
-
-            gt_vals = gt.get(key, set())
-            agent_vals = agent.get(key, set())
-
-            if not gt_vals and agent_vals:
-
-                mismatches.append(
-                    f"extra {key} filter: {agent_vals}"
-                )
-
-        # Boolean filters
-        for key in BOOLEAN_FILTERS:
-
-            gt_val = gt.get(key)
-            agent_val = agent.get(key)
-
-            if (
-                gt_val is None
-                and agent_val is not None
-            ):
-
-                mismatches.append(
-                    f"extra {key} filter: {agent_val}"
-                )
-
-        # Numeric filters
-        for key in NUMERIC_FILTERS:
-
-            gt_val = gt.get(key)
-            agent_val = agent.get(key)
-
-            if (
-                gt_val is None
-                and agent_val is not None
-            ):
-
-                mismatches.append(
-                    f"extra {key} filter: {agent_val}"
-                )
-
         return mismatches
 
 # =====================================================================
