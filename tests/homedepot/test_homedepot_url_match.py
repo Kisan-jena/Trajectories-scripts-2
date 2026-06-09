@@ -1053,3 +1053,75 @@ class TestQueryNormalization:
         )
 
         assert _match(agent, gt)[0]
+    
+def test_hostname_suffix_attack_domain():
+
+    v = _v(
+        f"{BASE}/s/vacuum"
+    )
+
+    asyncio.run(
+        v.update(
+            url="https://evilhomedepot.com/s/vacuum"
+        )
+    )
+
+    assert not v._found_match
+
+def test_token_equivalent_boxes():
+
+    v = _v(f"{BASE}/s/test")
+
+    assert v._token_equivalent(
+        "boxes",
+        "box",
+    )
+
+    assert v._token_equivalent(
+        "box",
+        "boxes",
+    )
+
+def test_category_token_order_independent():
+
+    gt = (
+        f"{BASE}/b/Test/"
+        "N-5yc1vZaaaZbbbZccc"
+    )
+
+    agent = (
+        f"{BASE}/b/Test/"
+        "N-5yc1vZcccZaaaZbbb"
+    )
+
+    assert _match(agent, gt)[0]
+
+def test_empty_bound_params_ignored():
+
+    gt = (
+        f"{BASE}/b/Tools/"
+        "N-5yc1vZc1xy"
+        "?lowerbound=&upperbound="
+    )
+
+    agent = (
+        f"{BASE}/b/Tools/"
+        "N-5yc1vZc1xy"
+    )
+
+    assert _match(agent, gt)[0]
+
+def test_empty_bound_params_ignored_agent():
+
+    gt = (
+        f"{BASE}/b/Tools/"
+        "N-5yc1vZc1xy"
+    )
+
+    agent = (
+        f"{BASE}/b/Tools/"
+        "N-5yc1vZc1xy"
+        "?lowerbound=&upperbound="
+    )
+
+    assert _match(agent, gt)[0]

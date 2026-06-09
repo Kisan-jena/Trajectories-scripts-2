@@ -122,14 +122,13 @@ class HomeDepotUrlMatch(BaseMetric):
             parsed.hostname or ""
         ).lower()
 
-        if not domain.endswith(
-            "homedepot.com"
+        if not (
+            domain == "homedepot.com"
+            or domain.endswith(".homedepot.com")
         ):
-
             logger.debug(
                 f"Ignoring non-homedepot URL: {url}"
             )
-
             return
 
         if self._found_match:
@@ -719,13 +718,14 @@ class HomeDepotUrlMatch(BaseMetric):
         query: str,
     ) -> dict:
 
-        raw_query = parse_qs(query)
+        raw_query = parse_qs(
+            query,
+            keep_blank_values=True,
+        )
 
         result = {}
 
-        for key, vals in (
-            raw_query.items()
-        ):
+        for key, vals in raw_query.items():
 
             normalized_key = (
                 key.lower().strip()
@@ -737,10 +737,16 @@ class HomeDepotUrlMatch(BaseMetric):
             ):
                 continue
 
-            result[normalized_key] = [
+            normalized_vals = [
                 self._normalize_string(v)
                 for v in vals
+                if self._normalize_string(v) != ""
             ]
+
+            if normalized_vals:
+                result[normalized_key] = (
+                    normalized_vals
+                )
 
         return result
 
@@ -890,25 +896,35 @@ class HomeDepotUrlMatch(BaseMetric):
         # es plurals
         # -------------------------------------------------------------
 
-        es_endings = (
-            "xes",
-            "ches",
-            "shes",
-            "zes",
-            "ses",
-        )
+        plural_map = {
+            "xes": "x",
+            "ches": "ch",
+            "shes": "sh",
+            "zes": "z",
+            "ses": "s",
+        }
 
-        if (
-            a.endswith(es_endings)
-            and a[:-2] == b
-        ):
-            return True
+        for plural_suffix, singular_suffix in plural_map.items():
 
-        if (
-            b.endswith(es_endings)
-            and b[:-2] == a
-        ):
-            return True
+            if a.endswith(plural_suffix):
+
+                singular = (
+                    a[:-len(plural_suffix)]
+                    + singular_suffix
+                )
+
+                if singular == b:
+                    return True
+
+            if b.endswith(plural_suffix):
+
+                singular = (
+                    b[:-len(plural_suffix)]
+                    + singular_suffix
+                )
+
+                if singular == a:
+                    return True
 
         # -------------------------------------------------------------
         # simple plural
@@ -992,7 +1008,7 @@ class HomeDepotUrlMatch(BaseMetric):
     def _extract_taxonomy_id(
         self,
         path: str,
-    ) -> str:
+    ) -> frozenset[str]:
 
         match = re.search(
             r"/N-([A-Za-z0-9Zz]+)",
@@ -1000,29 +1016,27 @@ class HomeDepotUrlMatch(BaseMetric):
             re.IGNORECASE,
         )
 
-        if match:
+        if not match:
+            return frozenset()
 
-            raw = (
-                match.group(1)
-                .strip()
-                .lower()
-            )
+        raw = (
+            match.group(1)
+            .strip()
+            .lower()
+        )
 
-            parts = re.split(
-                r"[Zz]",
-                raw,
-            )
+        parts = re.split(
+            r"[Zz]",
+            raw,
+        )
 
-            cleaned = [
-                p
-                for p in parts
-                if p and p != "5yc1v"
-            ]
+        cleaned = [
+            p
+            for p in parts
+            if p and p != "5yc1v"
+        ]
 
-            if cleaned:
-                return cleaned[0]
-
-        return ""
+        return frozenset(cleaned)
 
     def _extract_service_id(
         self,
