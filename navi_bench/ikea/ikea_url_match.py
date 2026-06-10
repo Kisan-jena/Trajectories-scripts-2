@@ -253,10 +253,11 @@ def _normalize_color(raw: str) -> str:
 def _parse_filters(filters_str: str) -> dict[str, list[str]]:
     """Parse IKEA filters parameter into a dict.
 
-    Input:  'f-colors:10156,f-price-buckets:PRICE_0_10000'
-    Output: {'f-colors': ['10156'], 'f-price-buckets': ['PRICE_0_10000']}
+    Input:  'f-colors:10028|10139,f-price-buckets:PRICE_0_10000'
+    Output: {'f-colors': ['10028', '10139'], 'f-price-buckets': ['PRICE_0_10000']}
 
-    Multiple values for the same filter type are collected into a list.
+    Pipe-separated values within a segment (e.g. f-colors:10028|10139) are
+    split into individual entries so order-independent comparison works correctly.
     """
     result: dict[str, list[str]] = {}
     if not filters_str:
@@ -270,8 +271,10 @@ def _parse_filters(filters_str: str) -> dict[str, list[str]]:
         key, _, value = part.partition(":")
         key = key.strip().lower()
         value = value.strip()
-        if key and value:
-            result.setdefault(key, []).append(value)
+        if not key or not value:
+            continue
+        values = [v.strip() for v in value.split("|") if v.strip()]
+        result.setdefault(key, []).extend(values)
 
     return result
 
@@ -543,12 +546,16 @@ class IkeaUrlMatch(BaseMetric):
             for filter_key, gt_values in gt_filters.items():
                 agent_values = agent_filters.get(filter_key, [])
 
-                # Normalize color values for comparison
+                # Normalize filter values for comparison
                 if filter_key == "f-colors":
                     gt_values = sorted([_normalize_color(v) for v in gt_values])
                     agent_values = sorted(
                         [_normalize_color(v) for v in agent_values]
                     )
+                else:
+                    # Case-insensitive comparison for all other filter types
+                    gt_values = [v.lower() for v in gt_values]
+                    agent_values = [v.lower() for v in agent_values]
 
                 if not agent_values:
                     details["mismatches"].append(
