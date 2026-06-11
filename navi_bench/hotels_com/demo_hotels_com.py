@@ -5,8 +5,8 @@ from dataclasses import dataclass, field
 from playwright.async_api import async_playwright
 from loguru import logger
 
-# Import the IKEA evaluator
-from ikea_url_match import IkeaUrlMatch
+# Import the Hotels.com evaluator
+from hotels_com_url_match import HotelsComUrlMatch
 
 @dataclass
 class BrowserConfig:
@@ -31,69 +31,44 @@ class TaskScenario:
     task_prompt: str
     gt_url: list  # Ground truth URL(s)
     location: str = "United States"
-    timezone: str = "America/Los_Angeles"
+    timezone: str = "America/New_York"
 
-# Demo Scenarios for IKEA US (ikea.com/us/en/)
+# Demo Scenarios for Hotels.com US
 SCENARIOS: list[TaskScenario] = [
     TaskScenario(
-        task_id="ikea/search_nav/white_desks_cheap",
-        name="White Desks — Sorted by Lowest Price",
-        description="Search for white desks and sort by cheapest first.",
-        url="https://www.ikea.com/us/en/",
+        task_id="hotels_com/search/ny_cheap",
+        name="New York Hotels — Lowest Price",
+        description="Search for New York hotels and sort by lowest price.",
+        url="https://www.hotels.com/",
         task_prompt=(
-            "Search for white desks on IKEA US and sort by lowest price."
+            "Search for hotels in New York on Hotels.com and sort by lowest price."
         ),
         gt_url=[
-            "https://www.ikea.com/us/en/search/?q=desk&filters=f-colors:10156&sort=PRICE_LOW_TO_HIGH"
+            "https://www.hotels.com/Hotel-Search?destination=New%20York&sort=PRICE_LOW_TO_HIGH"
         ],
     ),
     TaskScenario(
-        task_id="ikea/category_nav/sofas_beige_popular",
-        name="Beige Sofas Category — Most Popular",
-        description="Navigate to Sofas category, filter beige, sort by popular.",
-        url="https://www.ikea.com/us/en/",
+        task_id="hotels_com/search/miami_5star_pool",
+        name="Miami 5-Star with Pool",
+        description="Search for 5-star hotels in Miami with a pool.",
+        url="https://www.hotels.com/",
         task_prompt=(
-            "Find beige sofas in the Sofas category on IKEA, sorted by most popular."
+            "Find 5-star hotels in Miami with a pool on Hotels.com."
         ),
         gt_url=[
-            "https://www.ikea.com/us/en/cat/sofas-fu003/?filters=f-colors:10003&sort=MOST_POPULAR"
+            "https://www.hotels.com/Hotel-Search?destination=Miami&f-star-rating=5&f-amenities=POOL"
         ],
     ),
     TaskScenario(
-        task_id="ikea/search_nav/black_dining_chairs",
-        name="Black Dining Chairs — Color Filter",
-        description="Search for dining chairs and apply the black color filter.",
-        url="https://www.ikea.com/us/en/",
+        task_id="hotels_com/search/chicago_family",
+        name="Chicago Family Trip (2 Adults, 2 Kids)",
+        description="Search for a room in Chicago for 2 adults and 2 kids (ages 5 and 10).",
+        url="https://www.hotels.com/",
         task_prompt=(
-            "Search for dining chairs on IKEA US and filter by black color."
+            "Search for a hotel in Chicago for 2 adults and 2 children (ages 5 and 10) on Hotels.com."
         ),
         gt_url=[
-            "https://www.ikea.com/us/en/search/?q=dining+chair&filters=f-colors:10005",
-            "https://www.ikea.com/us/en/search/?q=dining%20chair&filters=f-colors:10005",
-        ],
-    ),
-    TaskScenario(
-        task_id="ikea/multi_filter/desks_white_under_100",
-        name="White Desks Under $100 — Multi-Filter",
-        description="Search for white desks under $100 with color + price filters.",
-        url="https://www.ikea.com/us/en/",
-        task_prompt=(
-            "Find white desks under $100 on IKEA US."
-        ),
-        gt_url=[
-            "https://www.ikea.com/us/en/search/?q=desk&filters=f-colors:10156,f-price-buckets:PRICE_0_10000"
-        ],
-    ),
-    TaskScenario(
-        task_id="ikea/category_nav/wardrobes_cheapest",
-        name="Wardrobes Category — Cheapest First",
-        description="Navigate to Wardrobes category and sort by lowest price.",
-        url="https://www.ikea.com/us/en/",
-        task_prompt=(
-            "Browse the Wardrobes category on IKEA US, sorted by cheapest first."
-        ),
-        gt_url=[
-            "https://www.ikea.com/us/en/cat/wardrobes-19053/?sort=PRICE_LOW_TO_HIGH"
+            "https://www.hotels.com/Hotel-Search?destination=Chicago&adults=2&rooms=1&children=1_5,1_10"
         ],
     ),
 ]
@@ -121,8 +96,7 @@ class ResultReporter:
         print("-" * 80)
 
 async def run_scenario(scenario: TaskScenario) -> dict:
-    # Initialize the IKEA evaluator with ground truth URL(s)
-    evaluator = IkeaUrlMatch(gt_url=scenario.gt_url)
+    evaluator = HotelsComUrlMatch(gt_url=scenario.gt_url)
     reporter = ResultReporter()
     
     print(f"\n{'='*60}\nTASK: {scenario.task_prompt}\n{'='*60}")
@@ -135,7 +109,6 @@ async def run_scenario(scenario: TaskScenario) -> dict:
         browser = await p.chromium.launch(headless=False)
         context = await browser.new_context(locale="en-US", timezone_id=scenario.timezone)
         
-        # Anti-detection
         await context.add_init_script("""
             Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
         """)
@@ -147,19 +120,16 @@ async def run_scenario(scenario: TaskScenario) -> dict:
         await asyncio.to_thread(input, "\nNavigate and press ENTER when you've completed the task... ")
         
         try:
-            # Grab the active tab's URL for verification
             active_page = context.pages[-1]
             final_url = active_page.url
             print(f"\n[SYSTEM] Verifying final URL: {final_url[:100]}...")
             
-            # IkeaUrlMatch uses update(url=...) — pass the final browser URL
             await evaluator.update(url=final_url)
         except Exception as e:
             print(f"\n[ERROR] Failed to capture URL: {e}")
             
         result = await evaluator.compute()
         
-        # Also get detailed result for debugging
         detailed = await evaluator.compute_detailed()
         
         await context.close()
@@ -173,8 +143,8 @@ async def main():
     logger.add(sys.stderr, format="<level>{message}</level>", level="INFO")
     
     print("\n" + "=" * 60)
-    print("  IKEA US — Demo Verifier")
-    print("  Verify URL-based navigation tasks on ikea.com/us/en/")
+    print("  Hotels.com US — Demo Verifier")
+    print("  Verify URL-based navigation tasks on hotels.com")
     print("=" * 60 + "\n")
     
     for i, s in enumerate(SCENARIOS, 1):
