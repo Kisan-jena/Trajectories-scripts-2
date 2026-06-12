@@ -1013,3 +1013,62 @@ class TestMUltiValueFilters:
         )
 
         assert _match(agent, gt)[0]
+    
+    def test_pune_vs_pune_maharashtra(self):
+        gt = (
+            "https://www.airbnb.com/s/Pune--Maharashtra/homes"
+        )
+
+        agent = (
+            "https://www.airbnb.com/s/pune/homes"
+        )
+
+        assert _match(agent, gt)[0]
+
+
+    def test_pune_maharashtra_vs_pune(self):
+        gt = (
+            "https://www.airbnb.com/s/pune/homes"
+        )
+
+        agent = (
+            "https://www.airbnb.com/s/Pune--Maharashtra/homes"
+        )
+
+        assert _match(agent, gt)[0]
+    
+
+    def test_different_cities_do_not_match(self):
+        gt = (
+            "https://www.airbnb.com/s/Pune--Maharashtra/homes"
+        )
+
+        agent = (
+            "https://www.airbnb.com/s/Mumbai--Maharashtra/homes"
+        )
+
+        assert not _match(agent, gt)[0]
+    
+    def test_different_cities_do_not_match(self):
+        gt = (
+            "https://www.airbnb.com/s/Pune--Maharashtra/homes"
+        )
+
+        agent = (
+            "https://www.airbnb.com/s/Mumbai--Maharashtra/homes"
+        )
+
+        match, details = _match(agent, gt)
+
+        assert not match
+
+        assert any(
+            "location" in mismatch.lower()
+            for mismatch in details["mismatches"]
+        )
+    
+    def test_pune_vs_bengaluru(self):
+        gt = "https://www.airbnb.com/s/Pune/homes"
+        agent = "https://www.airbnb.com/s/Bengaluru--Karnataka/homes"
+
+        assert not _match(agent, gt)[0]
