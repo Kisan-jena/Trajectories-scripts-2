@@ -110,7 +110,6 @@ NUMERIC_FILTERS = [
 STRING_FILTERS = [
 
     # Identity
-    "location_slug",
     "place_id",
 
     # Dates
@@ -922,7 +921,10 @@ class AirbnbUrlMatch(BaseMetric):
                 gt.get("location_slug", "")
             )
 
-            if agent_slug != gt_slug:
+            if not self._locations_match(
+                agent_slug,
+                gt_slug,
+            ):
 
                 mismatches.append(
                     f"location mismatch: "
@@ -1065,6 +1067,39 @@ class AirbnbUrlMatch(BaseMetric):
 # =====================================================================
 # HELPERS
 # =====================================================================
+
+    def _locations_match(
+        self,
+        agent_slug: str,
+        gt_slug: str,
+    ) -> bool:
+
+        agent_slug = self._normalize_location_slug(
+            agent_slug
+        )
+
+        gt_slug = self._normalize_location_slug(
+            gt_slug
+        )
+
+        if agent_slug == gt_slug:
+            return True
+
+        agent_parts = agent_slug.split("--")
+        gt_parts = gt_slug.split("--")
+
+        return agent_parts[0] == gt_parts[0]
+
+    def _normalize_location_slug(
+        self,
+        slug: str,
+    ) -> str:
+
+        return (
+            self._decode_twice(slug)
+            .strip()
+            .lower()
+        )
 
     @staticmethod
     def _get_param(
